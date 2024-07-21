@@ -11,7 +11,7 @@ NC='\033[0m'
 sudo apt update
 sudo apt install -y bash findutils grep xxd git xxhash rsync expect jq unzip \
   curl wget git-core gcc make zlib1g-dev libbz2-dev libreadline-dev \
-  libsqlite3-dev libssl-dev libffi-dev
+  libsqlite3-dev libssl-dev libffi-dev liblzma-dev tk-dev
 ################################################################################
 # Install Go, globally.
 

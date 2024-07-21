@@ -7,7 +7,6 @@
 
 import asyncio
 import datetime
-import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -15,7 +14,8 @@ from typing import Any, Dict, List, Optional, Union, overload
 
 import sqlalchemy
 from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
-                        Result, String, Table, func, text, JSON)
+                        Result, String, Table, func, text)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
                                     async_sessionmaker)
@@ -24,7 +24,6 @@ from sqlalchemy.sql.expression import distinct, insert, select, update
 from typing_extensions import Literal
 
 from ..base import base as _base
-from ..private import utilities as _utilities
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ METADATA = MetaData()
 RESOURCES = Table(
     'resources',
     METADATA,
-    Column('channels', JSON, nullable=False),
+    Column('channels', JSONB, nullable=False),
     Column('id', String, primary_key=True),
     Column('inserted',
            TIMESTAMP(timezone=False),
@@ -82,7 +81,7 @@ REPORTS = Table(
            server_default=func.now()),
     Column('resource_id', String, nullable=False),
     Column('report', String, nullable=False),
-    Column('extra', JSON, nullable=True),
+    Column('extra', JSONB, nullable=True),
 )
 
 LEASES = Table(
@@ -98,7 +97,7 @@ LEASES = Table(
            nullable=False,
            server_default=func.now()),
     Column('client_name', String, nullable=False),
-    Column('channels', JSON, nullable=False),
+    Column('channels', JSONB, nullable=False),
     Column('priority', Float, nullable=False),
     Column('resource_id', String, nullable=True),
     Column('data', String, nullable=True),
@@ -131,7 +130,7 @@ class DBFulcrum(_base.FulcrumBase):
                                                    expire_on_commit=False,
                                                    class_=AsyncSession)
     self._service_sleep_interval = service_sleep_interval
-    self._service_task: Optional[asyncio.Task] = None 
+    self._service_task: Optional[asyncio.Task] = None
 
   def close(self):
     if self._service_task is None:
@@ -150,8 +149,9 @@ class DBFulcrum(_base.FulcrumBase):
   async def Initialize(self):
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.create_all)
-    self._service_task = asyncio.create_task(self._Service(), name=f'{self.__class__.__name__}._Service')
-  
+    self._service_task = asyncio.create_task(
+        self._Service(), name=f'{self.__class__.__name__}._Service')
+
   async def DropAll(self):
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
@@ -242,7 +242,7 @@ WITH expired_leases AS (
 ), newly_free_resource_items AS (
   SELECT channel, resource_id
   FROM expired_leases INNER JOIN resources ON resources.id = expired_leases.resource_id
-  CROSS JOIN json_array_elements_text(resources.channels) AS channel
+  CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
   WHERE resources.tombstone = FALSE
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
@@ -437,7 +437,7 @@ WITH inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resources.id
   FROM resources
-  CROSS JOIN json_array_elements_text(resources.channels) AS channel
+  CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
   WHERE resources.id = :resource_id
     AND resources.tombstone = FALSE
 )
@@ -454,12 +454,12 @@ SELECT 1
 
 WITH inserted_resource AS (
   INSERT INTO resources(id, channels, data)
-  SELECT :id, :channels, :data
+  VALUES (:id, :channels, :data)
   RETURNING *
 ), newly_free_resource_items AS (
   SELECT channel, inserted_resource.id AS resource_id
   FROM inserted_resource
-    CROSS JOIN json_array_elements_text(inserted_resource.channels) AS channel
+    CROSS JOIN jsonb_array_elements_text(inserted_resource.channels) AS channel
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
@@ -468,12 +468,12 @@ WITH inserted_resource AS (
 SELECT 1
 """
         stmt = sqlalchemy.text(sql)
-        await session.execute(
-            stmt, {
-                'id': resource_id,
-                'channels': await _utilities.to_thread(json.dumps, channels),
-                'data': data,
-            })
+        stmt = stmt.bindparams(sqlalchemy.bindparam('channels', type_=JSONB))
+        await session.execute(stmt, {
+            'id': resource_id,
+            'channels': channels,
+            'data': data,
+        })
 
   async def RemoveResource(self, *, resource_id: _base.ResourceID):
     async with self._GetSession() as session:

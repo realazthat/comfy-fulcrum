@@ -7,8 +7,10 @@
 
 import datetime
 import logging
+import sys
+import uuid
 from pathlib import Path
-from typing import List, Union
+from typing import Any, List, Optional, Union
 
 import fastapi
 from fastapi import HTTPException, Request
@@ -18,28 +20,36 @@ from humanize import naturaldelta
 from pydantic import TypeAdapter
 from starlette.datastructures import UploadFile
 
+if sys.version_info >= (3, 9):
+  import importlib.resources as pkg_resources
+else:
+  import importlib_resources as pkg_resources
+
 from ..base import base as _base
 from ..base import fastapi_server_base as _server_base
-from ..fastapi_client import fastapi_client as _fastapi_client
+from . import templates
 
-TEMPLATE_MGMT_PATH = Path(__file__).parent / 'templates/mgmt.html'
-assert TEMPLATE_MGMT_PATH.exists(), f'{TEMPLATE_MGMT_PATH} does not exist'
+TEMPLATES_PATH = Path(str(pkg_resources.files(templates)))
+TEMPLATE_MGMT_PATH = 'mgmt.html'
+assert (TEMPLATES_PATH / TEMPLATE_MGMT_PATH
+        ).exists(), f'{TEMPLATES_PATH / TEMPLATE_MGMT_PATH} does not exist'
 
 logger = logging.getLogger(__name__)
 
 
 class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
 
-  def __init__(self,
-               *,
-               fulcrum_api_url: str,
-               templates: Jinja2Templates,
-               endpoints: _server_base.FulcrumUIRoutesBase.
-               Endpoints = _server_base.FulcrumUIRoutesBase.DEFAULT_ENDPOINTS):
-    self._templates = templates
-    self._fulcrum_api_url = fulcrum_api_url
-    self._fulcrum = _fastapi_client.FulcrumClient(
-        fulcrum_api_url=self._fulcrum_api_url)
+  def __init__(
+      self,
+      *,
+      fulcrum: _base.FulcrumBase,
+      debug: bool,
+      #  templates: Jinja2Templates,
+      endpoints: _server_base.FulcrumUIRoutesBase.Endpoints = _server_base.
+      FulcrumUIRoutesBase.DEFAULT_ENDPOINTS):
+    self._templates = Jinja2Templates(directory=TEMPLATES_PATH)
+    self._fulcrum = fulcrum
+    self._debug = debug
 
     self._router = fastapi.APIRouter()
     self._endpoints = endpoints
@@ -60,6 +70,24 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
 
   def Router(self) -> fastapi.APIRouter:
     return self._router
+
+  def _HTTPException(self, msg: str, *, status_code: int,
+                     e: Optional[Exception]) -> HTTPException:
+    error_id: str = uuid.uuid4().hex
+    exc_info: Any = None
+    if e is None:
+      exc_info = 'N/A'
+    else:
+      exc_info = 'N/A in production'
+      if self._debug:
+        exc_info = _server_base.ExceptionInfo.from_exception(e).model_dump(
+            mode='json', round_trip=True, by_alias=True)
+    return HTTPException(status_code=status_code,
+                         detail={
+                             'msg': msg,
+                             'exc_info': exc_info,
+                             'error_id': error_id
+                         })
 
   async def _UIMGMTRoute(self, request: Request):
     now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -98,24 +126,29 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
     data: Union[UploadFile, str] = form['data']
 
     if isinstance(resource_id, UploadFile):
-      raise HTTPException(status_code=400, detail='resource_id is not a string')
+      raise self._HTTPException('resource_id is not a string',
+                                status_code=400,
+                                e=None)
     if isinstance(channels_json, UploadFile):
-      raise HTTPException(status_code=400, detail='channels is not a string')
+      raise self._HTTPException('channels is not a string',
+                                status_code=400,
+                                e=None)
     if isinstance(data, UploadFile):
-      raise HTTPException(status_code=400, detail='data is not a string')
+      raise self._HTTPException('data is not a string', status_code=400, e=None)
     try:
       resource_id = resource_id_ta.validate_python(resource_id)
     except Exception as e:
       logger.exception('Invalid input: resource_id')
-      raise HTTPException(status_code=400,
-                          detail='Invalid input: resource_id') from e
+      raise self._HTTPException('Invalid input: resource_id',
+                                status_code=400,
+                                e=e) from e
 
     try:
       channels: List[_base.ChannelID] = channels_ta.validate_json(channels_json)
     except Exception as e:
       logger.exception('Invalid input: channels')
-      raise HTTPException(status_code=400,
-                          detail='Invalid input: channels') from e
+      raise self._HTTPException('Invalid input: channels', status_code=400,
+                                e=e) from e
 
     try:
       await self._fulcrum.RegisterResource(resource_id=resource_id,
@@ -123,18 +156,19 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
                                            data=data)
     except _server_base.ReconstructedException as e:
       if e.info.type == 'IntegrityError':
-        raise HTTPException(
+        raise self._HTTPException(
+            'Resource violates DB integrity (e.g it already exists, or a submitted value is bad)',
             status_code=409,
-            detail=
-            'Resource violates DB integrity (e.g it already exists, or a submitted value is bad)'
-        ) from e
+            e=e) from e
       logger.exception('Failed to register resource')
-      raise HTTPException(status_code=500,
-                          detail='Failed to register resource') from e
+      raise self._HTTPException(msg='Failed to register resource',
+                                status_code=500,
+                                e=e) from e
     except Exception as e:
       logger.exception('Failed to register resource')
-      raise HTTPException(status_code=500,
-                          detail='Failed to register resource') from e
+      raise self._HTTPException(msg='Failed to register resource',
+                                status_code=500,
+                                e=e) from e
 
     # Redirect back to the management page without any post params:
     return fastapi.responses.RedirectResponse(self._endpoints.mgmt,

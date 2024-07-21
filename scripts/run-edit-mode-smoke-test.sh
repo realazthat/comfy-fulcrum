@@ -28,26 +28,26 @@ find "${TMP_PROJ_PATH}" -type f -not -path '*/.*' -exec chmod 777 {} +
 
 
 ################################################################################
-# Install snipinator and run smoke test
+# Install comfy_fulcrum and run smoke test
 cd "${TMP_DIR}"
 cp "${PROJ_PATH}/.python-version" .
 VENV_PATH="${TMP_DIR}/.venv" source "${PROJ_PATH}/scripts/utilities/ensure-venv.sh"
 pip install -U pip
 
 EXIT_CODE=0
-python -m snipinator.cli --help || EXIT_CODE=$?
+python -m comfy_fulcrum.cli --help || EXIT_CODE=$?
 if [[ "${EXIT_CODE}" -eq 0 ]]; then
-  echo -e "${RED}Expected snipinator to to fail in a clean environment${NC}"
+  echo -e "${RED}Expected comfy_fulcrum to to fail in a clean environment${NC}"
   exit 1
 fi
-echo -e "${GREEN}Success: snipinator failed in a clean environment${NC}"
+echo -e "${GREEN}Success: comfy_fulcrum failed in a clean environment${NC}"
 
 pip install -e "${TMP_PROJ_PATH}"[cli]
-echo -e "${GREEN}Success: snipinator installed successfully${NC}"
+echo -e "${GREEN}Success: comfy_fulcrum installed successfully${NC}"
 
-python -m snipinator.cli --help
-python -m snipinator.cli --version
-echo -e "${GREEN}Success: snipinator smoke test ran successfully${NC}"
+python -m comfy_fulcrum.cli --help
+python -m comfy_fulcrum.cli --version
+echo -e "${GREEN}Success: comfy_fulcrum smoke test ran successfully${NC}"
 
 echo -e "${GREEN}${BASH_SOURCE[0]}: Tests ran successfully${NC}"
 ################################################################################

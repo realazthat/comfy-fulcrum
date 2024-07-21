@@ -17,7 +17,7 @@ import sys
 from typing import Any, Callable, TypeVar
 
 if sys.version_info >= (3, 9):
-  from asyncio import to_thread
+  to_thread = asyncio.to_thread
 else:
   T = TypeVar('T')
 

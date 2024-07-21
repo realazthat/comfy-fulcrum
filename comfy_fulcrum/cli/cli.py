@@ -21,13 +21,13 @@ import fastapi
 import hypercorn
 import hypercorn.asyncio
 import yaml
-from fastapi.templating import Jinja2Templates
 from pydantic import TypeAdapter
 from rich.console import Console
 from rich_argparse import RichHelpFormatter
 from sqlalchemy.ext.asyncio import create_async_engine
 from typing_extensions import Literal
 
+from .. import _build_version as _build_version
 from ..base.base import Lease, ResourceMeta, Ticket
 from ..base.fastapi_server_base import (GetReq, RegisterResourceReq,
                                         ReleaseReq, RemoveResourceReq,
@@ -36,11 +36,9 @@ from ..db.db import DBFulcrum
 from ..fastapi_client.fastapi_client import FulcrumClient
 from ..fastapi_server.fastapi_server import FulcrumAPIState
 from ..fastapi_ui.fastapi_ui import FulcrumUIRoutes
-from .. import _build_version as _build_version
 
 DEFAULT_SERVICE_SLEEP_INTERVAL = 0.5
 DEFAULT_LEASE_TIMEOUT = 60.0 * 3
-
 
 CommandType = Literal['server', 'client']
 CommandTA = TypeAdapter[CommandType](CommandType)
@@ -94,11 +92,7 @@ async def _ServeCommand(*, dsn: str, host: str, port: int, lease_timeout: float,
   app = fastapi.FastAPI()
   await FulcrumAPIState.InitializeFulcrumAPI(app, fulcrum=db_fulcrum)
 
-  ui_router = FulcrumUIRoutes(
-      fulcrum_api_url=f'http://{host}:{port}',
-      templates=Jinja2Templates(
-          directory=['.', 'comfy_fulcrum/fastapi_server']),
-  )
+  ui_router = FulcrumUIRoutes(fulcrum=db_fulcrum, debug=app.debug)
   app.include_router(ui_router.Router())
 
   hypercorn_config = hypercorn.Config()
