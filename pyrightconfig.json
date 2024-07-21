@@ -1,0 +1,18 @@
+{
+  "include": ["comfy_fulcrum"],
+  "exclude": ["**/__pycache__"],
+  "ignore": [],
+  "defineConstant": {
+    "DEBUG": true
+  },
+  "stubPath": "comfy_fulcrum/stubs",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "pythonVersion": "3.8",
+  "pythonPlatform": "Linux",
+  "executionEnvironments": [
+    {
+      "root": "comfy_fulcrum"
+    }
+  ]
+}

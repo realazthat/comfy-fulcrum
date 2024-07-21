@@ -1,0 +1,90 @@
+{% extends './base.html' %}
+
+{% block head_title %}Fulcrum UI: Management{% endblock %}
+{% block h1_title %}Fulcrum UI: Management{% endblock %}
+
+{% block body_content %}
+  {{ super() }}
+  <style>
+    .table-div {
+      max-width: 1200px;
+      margin: auto;
+      display: grid;
+      gap: 0;
+      border: 1px solid #000;
+      border-collapse: collapse;
+      width: auto;
+    }
+    .table-cell {
+      border: 1px solid #000;
+      padding: 10px;
+      overflow-x: auto;
+    }
+    .table-header {
+      font-weight: bold;
+    }
+    pre {
+      white-space: pre;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .code-block {
+      display: inline;
+      background-color: #f5f5f5; /* Light gray background */
+      padding: 10px;
+      border-radius: 5px;
+      font-family: monospace;
+      overflow-x: auto;
+      user-select: all;
+    }
+  </style>
+
+  <fieldset>
+    <legend>Add Resource</legend>
+    <form action="{{ url_for('UIResourceAddPost') }}" method="post">
+
+      <div class="table-div" style="grid-template-columns: 1fr 4fr">
+        <label class="table-cell" for="resource_id">Resource ID</label>
+        <input class="table-cell" type="text" name="resource_id" value="" placeholder="Resource ID" />
+
+        <label class="table-cell" for="channels">Channels (JSON)</label>
+        <input class="table-cell" type="text" name="channels" value="" placeholder="Channels (JSON)" />
+
+        <label class="table-cell" for="resource_data">Data (String)</label>
+        <textarea class="table-cell" name="data" value="" placeholder="Data (String)"></textarea>
+        
+        <div style="grid-column: span 2; text-align: center; border: 1px solid #000; padding: 10px">
+          <input type="submit" value="Submit" />
+        </div>
+      </div>
+    </form>
+  </fieldset>
+  <hr/>
+  <div class="table-div" style="grid-template-columns: 2fr 2fr 2fr 2fr;">
+    <div class="table-header table-cell">Inserted Time</div>
+    <div class="table-header table-cell">ID</div>
+    <div class="table-header table-cell">Channels</div>
+    <div class="table-header table-cell">Data</div>
+    {% for resource in resources %}
+    <div class="table-cell">
+      <pre class="code-block">{{resource.started}}</pre>
+
+      <br/>
+      <br/>
+      <hr/>
+
+      Ago {{resource.started_ago}}
+    </div>
+    <div class="table-cell"><pre class="code-block">{{ resource.id }}</pre></div>
+    <div class="table-cell">
+      {% for channel in resource.channels %}
+        {% if not loop.first %}
+          |
+        {% endif %}
+        <pre class="code-block">{{ channel}}</pre>
+      {% endfor %}
+    </div>
+    <div class="table-cell"><pre class="code-block">{{ resource.data }}</pre></div>
+    {% endfor %}
+  </div>
+{% endblock %}

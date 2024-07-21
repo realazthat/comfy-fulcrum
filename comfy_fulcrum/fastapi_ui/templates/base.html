@@ -1,0 +1,19 @@
+<html>
+  <head>
+    {% block head_inner %}
+    <title>{% block head_title %}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% endblock %}
+  </head>
+  <body>
+    {% block body_content %}
+    <h1>{% block h1_title %}{% endblock %}</h1>
+    
+    <div>
+      <a href="{{ request.url_for('_UIMGMTRoute') }}">UI Home</a>
+      |
+      <a href="/docs">API Documentation</a>
+    </div>
+    {% endblock %}
+  </body>
+</html>
