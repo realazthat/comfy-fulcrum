@@ -1,4 +1,5 @@
 .venv
+.*-venv
 .vscode
 __pycache__
 .deleteme
@@ -15,3 +16,4 @@ node_modules/
 .mypy_cache/
 .ruff_cache/
 .debug/
+.data/
