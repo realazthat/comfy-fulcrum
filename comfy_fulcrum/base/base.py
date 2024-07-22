@@ -17,7 +17,8 @@ ClientName = NewType('ClientName', str)
 LeaseID = NewType('LeaseID', str)
 ResourceID = NewType('ResourceID', str)
 ChannelID = NewType('ChannelID', str)
-ReportType = Literal['success', 'permanent_failure', 'temporary_failure']
+ReportType = Literal['success', 'permanent_failure', 'temporary_failure',
+                     'user_failure', 'timeout']
 
 logger = logging.getLogger(__name__)
 

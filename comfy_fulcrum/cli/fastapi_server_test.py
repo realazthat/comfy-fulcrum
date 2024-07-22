@@ -168,6 +168,7 @@ async def amain():
                        service_sleep_interval=0.1) as db_fulcrum:
     async with engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
+    await db_fulcrum.DropAll()
     await db_fulcrum.Initialize()
 
     # fulcrum = FulcrummLogger(fulcrum=db_fulcrum, logger=logging.getLogger('FulcrummLogger'))

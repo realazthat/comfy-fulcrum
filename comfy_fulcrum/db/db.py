@@ -81,6 +81,7 @@ REPORTS = Table(
            nullable=False,
            server_default=func.now()),
     Column('resource_id', String, nullable=False),
+    Column('lease_id', String, nullable=True),
     Column('report', String, nullable=False),
     Column('extra', JSONB, nullable=True),
 )
@@ -250,7 +251,16 @@ WITH expired_leases AS (
   SELECT channel, resource_id
   FROM newly_free_resource_items
   ON CONFLICT DO NOTHING
+), inserted_reports AS (
+  INSERT INTO reports(id, resource_id, lease_id, report, extra)
+  SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
+         expired_leases.resource_id as resource_id,
+         expired_leases.lease_id AS lease_id,
+         'timeout' AS report,
+         '{}'::jsonb AS extra
+  FROM expired_leases
 )
+  
 SELECT 1
 """
     stmt = sqlalchemy.text(sql)
@@ -419,6 +429,7 @@ SELECT 1
         report_insert_stmt = insert(REPORTS).values(
             id=uuid.uuid4().hex,
             resource_id=resource_id,
+            lease_id=lease_id,
             report=report,
             extra=report_extra,
         )
