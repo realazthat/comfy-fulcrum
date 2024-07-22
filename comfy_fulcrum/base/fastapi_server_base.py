@@ -270,6 +270,8 @@ class FulcrumUIRoutesBase(ABC):
   class Endpoints(NamedTuple):
     mgmt: str
     resource_add: str
+    resource_remove: str
 
   DEFAULT_ENDPOINTS = Endpoints(mgmt='/fulcrum/ui/mgmt',
-                                resource_add='/fulcrum/ui/resource_add')
+                                resource_add='/fulcrum/ui/resource_add',
+                                resource_remove='/fulcrum/ui/resource_remove')

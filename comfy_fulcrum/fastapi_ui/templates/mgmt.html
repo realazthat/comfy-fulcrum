@@ -60,11 +60,12 @@
     </form>
   </fieldset>
   <hr/>
-  <div class="table-div" style="grid-template-columns: 2fr 2fr 2fr 2fr;">
+  <div class="table-div" style="grid-template-columns: 2fr 2fr 2fr 2fr 1fr;">
     <div class="table-header table-cell">Inserted Time</div>
     <div class="table-header table-cell">ID</div>
     <div class="table-header table-cell">Channels</div>
     <div class="table-header table-cell">Data</div>
+    <div class="table-header table-cell">Remove</div>
     {% for resource in resources %}
     <div class="table-cell">
       <pre class="code-block">{{resource.started}}</pre>
@@ -85,6 +86,11 @@
       {% endfor %}
     </div>
     <div class="table-cell"><pre class="code-block">{{ resource.data }}</pre></div>
+    <div class="table-cell">
+      <form action="{{ url_for('UIResourceRemovePost') }}" method="post">
+        <input type="hidden" name="resource_id" value="{{ resource.id }}" />
+        <input type="submit" value="Remove" />
+    </div>
     {% endfor %}
   </div>
 {% endblock %}

@@ -68,6 +68,13 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
         methods=['POST'],
     )
 
+    self._router.add_api_route(
+        path=endpoints.resource_remove,
+        endpoint=self.UIResourceRemovePost,
+        response_class=fastapi.responses.RedirectResponse,
+        methods=['POST'],
+    )
+
   def Router(self) -> fastapi.APIRouter:
     return self._router
 
@@ -114,6 +121,44 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
         'request': request,
         'resources': resources_dicts,
     })
+
+  async def UIResourceRemovePost(self, request: Request):
+    resource_id_ta = TypeAdapter(_base.ResourceID)
+    form: FormData = await request.form()
+    resource_id: Union[UploadFile, str] = form['resource_id']
+    if isinstance(resource_id, UploadFile):
+      raise self._HTTPException('resource_id is not a string',
+                                status_code=400,
+                                e=None)
+    try:
+      resource_id = resource_id_ta.validate_python(resource_id)
+    except Exception as e:
+      logger.exception('Invalid input: resource_id')
+      raise self._HTTPException('Invalid input: resource_id',
+                                status_code=400,
+                                e=e) from e
+
+    try:
+      await self._fulcrum.RemoveResource(resource_id=resource_id)
+    except _server_base.ReconstructedException as e:
+      if e.info.type == 'IntegrityError':
+        raise self._HTTPException(
+            'Resource violates DB integrity (e.g it already exists, or a submitted value is bad)',
+            status_code=409,
+            e=e) from e
+      logger.exception('Failed to register resource')
+      raise self._HTTPException(msg='Failed to register resource',
+                                status_code=500,
+                                e=e) from e
+    except Exception as e:
+      logger.exception('Failed to register resource')
+      raise self._HTTPException(msg='Failed to register resource',
+                                status_code=500,
+                                e=e) from e
+
+    # Redirect back to the management page without any post params:
+    return fastapi.responses.RedirectResponse(self._endpoints.mgmt,
+                                              status_code=303)
 
   async def UIResourceAddPost(self, request: Request):
     resource_id_ta = TypeAdapter(_base.ResourceID)
