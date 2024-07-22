@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _AutoCommit(session: AsyncSession):
-  async with session.begin_nested():
+  async with session.begin():
     yield session
     await session.commit()
 
