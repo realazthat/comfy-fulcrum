@@ -235,7 +235,7 @@ WITH expired_leases AS (
   UPDATE leases
   SET tombstone = TRUE
   WHERE ends < :now
-    AND tombstone = FALSE
+    AND tombstone IS FALSE
   RETURNING id as lease_id, resource_id
 ), expired_channel_ticket_queue AS (
   DELETE FROM channel_ticket_queue
@@ -245,7 +245,7 @@ WITH expired_leases AS (
   SELECT channel, resource_id
   FROM expired_leases INNER JOIN resources ON resources.id = expired_leases.resource_id
   CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
-  WHERE resources.tombstone = FALSE
+  WHERE resources.tombstone IS FALSE
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
@@ -345,6 +345,7 @@ SELECT 1
 
         stmt = update(LEASES).where(*where_clauses).values(
             updated=now,
+            lease_timeout=self._lease_timeout,
             ends=now + datetime.timedelta(seconds=self._lease_timeout),
         ).returning(*LEASES.c)
 
@@ -449,7 +450,7 @@ WITH inserted_resource_items AS (
   FROM resources
   CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
   WHERE resources.id = :resource_id
-    AND resources.tombstone = FALSE
+    AND resources.tombstone IS FALSE
 )
 SELECT 1
 """
