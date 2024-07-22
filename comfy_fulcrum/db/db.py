@@ -251,6 +251,13 @@ WITH expired_leases AS (
   SELECT channel, resource_id
   FROM newly_free_resource_items
   ON CONFLICT DO NOTHING
+), updated_resource AS (
+  UPDATE resources
+  SET lease_id = NULL
+  FROM expired_leases
+  WHERE id = expired_leases.resource_id
+    -- This is redundant, but stricter. It should always be true.
+    AND resources.lease_id = expired_leases.lease_id
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
   SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
@@ -259,6 +266,7 @@ WITH expired_leases AS (
          'timeout' AS report,
          '{}'::jsonb AS extra
   FROM expired_leases
+  WHERE expired_leases.resource_id IS NOT NULL
 )
   
 SELECT 1
