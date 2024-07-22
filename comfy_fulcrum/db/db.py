@@ -331,9 +331,7 @@ SELECT 1
     async with self._GetSession() as session:
       async with _AutoCommit(session):
 
-        where_clauses = [LEASES.c.id == id]
-        # if type == 'lease':
-        #   where_clauses.append(_LEASES.c.resource_id != None)
+        where_clauses = [LEASES.c.id == id, LEASES.c.tombstone.is_(False)]
 
         stmt = update(LEASES).where(*where_clauses).values(
             updated=now,
