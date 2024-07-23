@@ -106,6 +106,7 @@ LEASES = Table(
     Column('lease_timeout', Float, nullable=False),
     Column('ends', TIMESTAMP(timezone=False), nullable=False),
     Column('tombstone', Boolean, nullable=False, server_default='FALSE'),
+    Index('leases_expired_idx', 'tombstone', 'ends'),
 )
 
 CHANNEL_TICKET_QUEUE = Table(
