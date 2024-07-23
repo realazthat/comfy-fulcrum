@@ -117,8 +117,8 @@ CHANNEL_TICKET_QUEUE = Table(
     Column('priority', Float, nullable=False),
     Column('t', TIMESTAMP(timezone=False), nullable=False),
     PrimaryKeyConstraint('channel', 'lease_id'),
-    Index('channel_ticket_queue_lease_id_t_idx', 'channel', 'lease_id',
-          'priority', 't'),
+    Index('channel_ticket_queue_lease_id_t_idx', 'channel', 'lease_id'),
+    Index('channel_ticket_queue_priority_t_idx', 'channel', 'priority', 't'),
 )
 
 
