@@ -323,7 +323,7 @@ SELECT 1
           stmt = insert(CHANNEL_TICKET_QUEUE).values(
               channel=channel,
               lease_id=ticket.id,
-              priority=0,
+              priority=priority,
               t=now,
           )
         await session.execute(stmt)
