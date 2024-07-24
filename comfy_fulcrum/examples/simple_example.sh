@@ -90,6 +90,11 @@ while true; do
   sleep 1
 done
 
+python -m comfy_fulcrum.cli client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
 RESOURCE_A_ID=a
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -99,6 +104,11 @@ python -m comfy_fulcrum.cli client \
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   list
+
+python -m comfy_fulcrum.cli client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
 
 TICKET=$(python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -130,6 +140,11 @@ COMFY_API_URL=$(echo "${RESOURCE_DATA}" | jq -r '.comfy_api_url')
 
 echo -e "${BLUE}COMFY_API_URL: ${COMFY_API_URL}${NC}"
 
+python -m comfy_fulcrum.cli client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
 sleep 2
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -138,8 +153,13 @@ python -m comfy_fulcrum.cli client \
 
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
-  --data '{"resource_id": "'"${TICKET_ID}"'"}' \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'"}' \
   remove
+
+python -m comfy_fulcrum.cli client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
 
 
 echo -e "${GREEN}Example ran successfully${NC}"

@@ -44,7 +44,7 @@ DEFAULT_LEASE_TIMEOUT = 60.0 * 3
 CommandType = Literal['server', 'client']
 CommandTA = TypeAdapter[CommandType](CommandType)
 ClientCommandType = Literal['list', 'register', 'remove', 'get', 'touch',
-                            'release']
+                            'release', 'stats']
 ClientCommandTA = TypeAdapter[ClientCommandType](ClientCommandType)
 FormatType = Literal['json', 'yaml', 'pformat']
 FormatTa = TypeAdapter[FormatType](FormatType)
@@ -152,6 +152,9 @@ async def _ExecuteClientCommand(*, fulcrum_api_url: str,
                           report=release_req.report,
                           report_extra=release_req.report_extra)
     return None
+  elif client_command == 'stats':
+    stats = await fulcrum.Stats()
+    return stats.model_dump(mode='json', by_alias=True, round_trip=True)
   else:
     raise ValueError(f'Unknown command: {client_command}')
 
@@ -252,6 +255,7 @@ async def amain():
     client_cmd_p.add_parser('get', help='Get a resource.')
     client_cmd_p.add_parser('touch', help='Touch a ticket/lease.')
     client_cmd_p.add_parser('release', help='Release a ticket/lease.')
+    client_cmd_p.add_parser('stats', help='Get stats.')
 
     args = p.parse_args()
 

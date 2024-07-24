@@ -55,6 +55,8 @@ class RemovedResourceInfo(BaseModel):
 class Stats(BaseModel):
   queue_size: int
   channel_queue_sizes: Dict[ChannelID, int]
+  resource_count: int
+  channel_resource_counts: Dict[ChannelID, int]
 
 
 class FulcrumBase(ABC):

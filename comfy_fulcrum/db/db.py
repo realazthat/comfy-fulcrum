@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Union, overload
 
 import sqlalchemy
+from pydantic import TypeAdapter
 from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
@@ -107,6 +108,7 @@ LEASES = Table(
     Column('ends', TIMESTAMP(timezone=False), nullable=False),
     Column('tombstone', Boolean, nullable=False, server_default='FALSE'),
     Index('leases_expired_idx', 'tombstone', 'ends'),
+    Index('leases_resource_idx', 'resource_id'),
 )
 
 CHANNEL_TICKET_QUEUE = Table(
@@ -163,12 +165,14 @@ class DBFulcrum(_base.FulcrumBase):
     return self._async_session_maker()
 
   async def _GetChannels(self, session: AsyncSession) -> List[_base.ChannelID]:
+    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+
     stmt = select(CHANNEL_TICKET_QUEUE.c.channel).distinct()
     result: AsyncResult = await session.stream(stmt)
     row: RowMapping
     channels: List[_base.ChannelID] = []
     async for row in result.mappings():
-      channels.append(_base.ChannelID(row.channel))
+      channels.append(channel_id_ta.validate_python(row.channel))
     return channels
 
   async def _ServiceChannelOnce(self, session: AsyncSession,
@@ -537,19 +541,54 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
             stale_leases_count=stale_leases_count,
         )
 
+  async def _ResourceCount(self, *, session: AsyncSession) -> int:
+    stmt = select(func.count(distinct(RESOURCES.c.id)).label('count')).where(
+        RESOURCES.c.tombstone.is_(False))
+
+    result: Result = await session.execute(stmt)
+    queue_size = result.scalar()
+    if not isinstance(queue_size, int):
+      raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
+    return queue_size
+
+  async def _ChannelResourceCounts(
+      self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
+    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+
+    sql = """
+
+SELECT channel, count(*) AS count
+FROM resources, jsonb_array_elements_text(resources.channels) AS channel
+WHERE tombstone IS FALSE
+GROUP BY channel
+"""
+    stmt = sqlalchemy.text(sql)
+    result = await session.stream(stmt)
+    channel_resource_counts: Dict[_base.ChannelID, int] = {}
+    async for row in result.mappings():
+      channel = channel_id_ta.validate_python(row.channel)
+      if not isinstance(channel, str):
+        raise ValueError(f'Expected str, got {type(channel)}: {channel}')
+      count = row.count
+      if not isinstance(count, int):
+        raise ValueError(f'Expected int, got {type(count)}: {count}')
+      channel_resource_counts[channel] = count
+    return channel_resource_counts
 
   async def _QueueSize(self, *, session: AsyncSession) -> int:
     stmt = select(
         func.count(distinct(CHANNEL_TICKET_QUEUE.c.lease_id)).label('count'))
 
     result: Result = await session.execute(stmt)
-    query_size = result.scalar()
-    if not isinstance(query_size, int):
-      raise ValueError(f'Expected int, got {type(query_size)}: {query_size}')
-    return query_size
+    queue_size = result.scalar()
+    if not isinstance(queue_size, int):
+      raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
+    return queue_size
 
   async def _ChannelQueueSize(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
+    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+
     stmt = select(
         CHANNEL_TICKET_QUEUE.c.channel,
         func.count(distinct(
@@ -558,13 +597,11 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
     result = await session.stream(stmt)
     channel_queue_sizes: Dict[_base.ChannelID, int] = {}
     async for row in result.mappings():
-      channel = _base.ChannelID(row.channel)
-      if not isinstance(channel, str):
-        raise ValueError(f'Expected str, got {type(channel)}: {channel}')
+      channel = channel_id_ta.validate_python(row.channel)
       count = row.count
       if not isinstance(count, int):
         raise ValueError(f'Expected int, got {type(count)}: {count}')
-      channel_queue_sizes[_base.ChannelID(row.channel)] = count
+      channel_queue_sizes[channel] = count
     return channel_queue_sizes
 
   async def ListResources(self) -> List[_base.ResourceMeta]:
@@ -594,6 +631,11 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
       async with _AutoCommit(session):
         queue_size = await self._QueueSize(session=session)
         channel_queue_sizes = await self._ChannelQueueSize(session=session)
+        resource_count = await self._ResourceCount(session=session)
+        channel_resource_counts = await self._ChannelResourceCounts(
+            session=session)
 
         return _base.Stats(queue_size=queue_size,
-                           channel_queue_sizes=channel_queue_sizes)
+                           channel_queue_sizes=channel_queue_sizes,
+                           resource_count=resource_count,
+                           channel_resource_counts=channel_resource_counts)
