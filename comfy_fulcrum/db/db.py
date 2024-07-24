@@ -107,7 +107,9 @@ LEASES = Table(
     Column('lease_timeout', Float, nullable=False),
     Column('ends', TIMESTAMP(timezone=False), nullable=False),
     Column('tombstone', Boolean, nullable=False, server_default='FALSE'),
-    Index('leases_expired_idx', 'tombstone', 'ends'),
+    Index('leases_tombstone_idx', 'tombstone', 'ends'),
+    Index('leases_tombstone_resource_ends_idx', 'tombstone', 'resource_id',
+          'ends'),
     Index('leases_resource_idx', 'resource_id'),
 )
 
@@ -541,6 +543,16 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
             stale_leases_count=stale_leases_count,
         )
 
+  async def _ActiveLeasesCount(self, *, session: AsyncSession) -> int:
+    stmt = select(func.count(distinct(LEASES.c.id)).label('count')).where(
+        LEASES.c.tombstone.is_(False), LEASES.c.resource_id.isnot(None))
+
+    result: Result = await session.execute(stmt)
+    leases = result.scalar()
+    if not isinstance(leases, int):
+      raise ValueError(f'Expected int, got {type(leases)}: {leases}')
+    return leases
+
   async def _ResourceCount(self, *, session: AsyncSession) -> int:
     stmt = select(func.count(distinct(RESOURCES.c.id)).label('count')).where(
         RESOURCES.c.tombstone.is_(False))
@@ -629,13 +641,21 @@ GROUP BY channel
   async def Stats(self) -> _base.Stats:
     async with self._GetSession() as session:
       async with _AutoCommit(session):
-        queue_size = await self._QueueSize(session=session)
-        channel_queue_sizes = await self._ChannelQueueSize(session=session)
-        resource_count = await self._ResourceCount(session=session)
-        channel_resource_counts = await self._ChannelResourceCounts(
+        active_leases_task = self._ActiveLeasesCount(session=session)
+        queue_size_task = self._QueueSize(session=session)
+        channel_queue_sizes_task = self._ChannelQueueSize(session=session)
+        resource_count_task = self._ResourceCount(session=session)
+        channel_resource_counts_task = self._ChannelResourceCounts(
             session=session)
 
-        return _base.Stats(queue_size=queue_size,
+        active_leases = await active_leases_task
+        queue_size = await queue_size_task
+        channel_queue_sizes = await channel_queue_sizes_task
+        resource_count = await resource_count_task
+        channel_resource_counts = await channel_resource_counts_task
+
+        return _base.Stats(active_leases=active_leases,
+                           queue_size=queue_size,
                            channel_queue_sizes=channel_queue_sizes,
                            resource_count=resource_count,
                            channel_resource_counts=channel_resource_counts)

@@ -53,6 +53,7 @@ class RemovedResourceInfo(BaseModel):
 
 
 class Stats(BaseModel):
+  active_leases: int
   queue_size: int
   channel_queue_sizes: Dict[ChannelID, int]
   resource_count: int
