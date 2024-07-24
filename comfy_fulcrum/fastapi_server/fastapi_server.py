@@ -201,9 +201,12 @@ class FulcrumServerRoutes(_server_base.FulcrumServerRoutesBase):
       self,
       req: _server_base.RemoveResourceReq) -> _server_base.RemoveResourceRes:
     try:
-      await self._fulcrum.RemoveResource(resource_id=req.resource_id)
+      removed_info = await self._fulcrum.RemoveResource(
+          resource_id=req.resource_id)
       return _server_base.RemoveResourceRes(
-          success=_server_base.RemoveResourceResSuccess(), error=None)
+          success=_server_base.RemoveResourceResSuccess(
+              removed_info=removed_info),
+          error=None)
     except Exception as e:
       logger.exception('Error in RemoveResourceRoute')
       req_dict = await _to_thread(req.model_dump,

@@ -495,22 +495,48 @@ SELECT 1
             'data': data,
         })
 
-  async def RemoveResource(self, *, resource_id: _base.ResourceID):
+  async def RemoveResource(
+      self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     async with self._GetSession() as session:
       async with _AutoCommit(session):
         sql = """
 WITH removed_resource AS (
   UPDATE resources
   SET tombstone = TRUE
-  WHERE id = :id
+  WHERE id = :resource_id
+  RETURNING *
 ), removed_resource_items AS (
   DELETE FROM resource_free_queue
-  WHERE resource_id = :id
+  WHERE resource_id = :resource_id
+  RETURNING *
+), stale_leases AS (
+  UPDATE leases
+  SET tombstone = TRUE
+  WHERE resource_id = :resource_id
+  RETURNING *
 )
-SELECT 1
+SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
+       (SELECT COUNT(*) FROM removed_resource_items) as removed_resource_items_count,
+       (SELECT COUNT(*) FROM stale_leases) as stale_leases_count
 """
         stmt = sqlalchemy.text(sql)
-        await session.execute(stmt, {'id': resource_id})
+        stmt = stmt.bindparams(sqlalchemy.bindparam('resource_id',
+                                                    type_=String))
+        stmt = stmt.bindparams(resource_id=resource_id)
+
+        result = await session.execute(stmt)
+        row = result.mappings().first()
+        if row is None:
+          raise AssertionError('Expected a row, got None')
+        removed_resource_count = row.removed_resource_count
+        removed_resource_items_count = row.removed_resource_items_count
+        stale_leases_count = row.stale_leases_count
+        return _base.RemovedResourceInfo(
+            removed_resource_count=removed_resource_count,
+            removed_resource_items_count=removed_resource_items_count,
+            stale_leases_count=stale_leases_count,
+        )
+
 
   async def _QueueSize(self, *, session: AsyncSession) -> int:
     stmt = select(

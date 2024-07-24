@@ -46,6 +46,12 @@ class ResourceMeta(BaseModel):
   data: str
 
 
+class RemovedResourceInfo(BaseModel):
+  removed_resource_count: int
+  removed_resource_items_count: int
+  stale_leases_count: int
+
+
 class Stats(BaseModel):
   queue_size: int
   channel_queue_sizes: Dict[ChannelID, int]
@@ -77,7 +83,8 @@ class FulcrumBase(ABC):
     raise NotImplementedError()
 
   @abstractmethod
-  async def RemoveResource(self, *, resource_id: ResourceID):
+  async def RemoveResource(self, *,
+                           resource_id: ResourceID) -> RemovedResourceInfo:
     raise NotImplementedError()
 
   @abstractmethod

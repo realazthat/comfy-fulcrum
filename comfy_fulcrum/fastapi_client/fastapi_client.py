@@ -122,12 +122,15 @@ class FulcrumClient(_base.FulcrumBase):
                         res_type=_server_base.RegisterResourceRes,
                         suc_type=_server_base.RegisterResourceResSuccess)
 
-  async def RemoveResource(self, *, resource_id: _base.ResourceID):
+  async def RemoveResource(
+      self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     req = _server_base.RemoveResourceReq(resource_id=resource_id)
-    await self._APICall(endpoint=self._endpoints.remove_resource,
-                        req=req,
-                        res_type=_server_base.RemoveResourceRes,
-                        suc_type=_server_base.RemoveResourceResSuccess)
+    success: _server_base.RemoveResourceResSuccess = await self._APICall(
+        endpoint=self._endpoints.remove_resource,
+        req=req,
+        res_type=_server_base.RemoveResourceRes,
+        suc_type=_server_base.RemoveResourceResSuccess)
+    return success.removed_info
 
   async def ListResources(self) -> List[_base.ResourceMeta]:
     req = _server_base.ListResourcesReq()

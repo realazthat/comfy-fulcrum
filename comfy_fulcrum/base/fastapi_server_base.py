@@ -196,7 +196,7 @@ class RemoveResourceReq(BaseModel):
 
 
 class RemoveResourceResSuccess(BaseModel):
-  pass
+  removed_info: _base.RemovedResourceInfo
 
 
 class RemoveResourceResError(_ResponseErrorBase):
