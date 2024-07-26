@@ -19,8 +19,8 @@ from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
-from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
-                                    async_sessionmaker)
+from sqlalchemy.ext.asyncio import (AsyncConnection, AsyncEngine, AsyncResult,
+                                    AsyncSession, async_sessionmaker)
 from sqlalchemy.schema import PrimaryKeyConstraint
 from sqlalchemy.sql.expression import distinct, insert, select, update
 from typing_extensions import Literal
@@ -31,7 +31,11 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def _AutoCommit(session: AsyncSession):
+async def _AutoCommit(session: AsyncSession,
+                      isolation_level: Optional[str] = None):
+  if isolation_level is not None:
+    conn: AsyncConnection = await session.connection()
+    await conn.execution_options(isolation_level='SERIALIZABLE')
   async with session.begin():
     yield session
     await session.commit()
@@ -205,6 +209,7 @@ WITH free_resources AS (
   FROM queued_tickets
     INNER JOIN free_resources USING (rn)
     INNER JOIN resources ON resources.id = free_resources.resource_id
+  FOR UPDATE
 ), remove_ticket_from_queue AS (
   DELETE FROM channel_ticket_queue
   WHERE lease_id IN (SELECT lease_id FROM matches_)
@@ -426,51 +431,58 @@ SELECT 1
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
                     report_extra: Optional[Any]):
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     async with self._GetSession() as session:
       async with _AutoCommit(session):
-        lease_update_stmt = update(LEASES).where(LEASES.c.id == id).values(
-            tombstone=True,
-        ).returning(*LEASES.c)
-        result: AsyncResult = await session.stream(lease_update_stmt)
-        row: Optional[RowMapping] = await result.mappings().first()
-        if row is None:
-          return
-        resource_id: Optional[_base.ResourceID] = row.resource_id
-        if resource_id is None:
-          return
-        lease_id: _base.LeaseID = row.id
-
-        # Save reports.
-        report_insert_stmt = insert(REPORTS).values(
-            id=uuid.uuid4().hex,
-            resource_id=resource_id,
-            lease_id=lease_id,
-            report=report,
-            extra=report_extra,
-        )
-        await session.execute(report_insert_stmt)
-
-        # Update the resource.
-        resource_update_stmt = update(RESOURCES) \
-            .where(RESOURCES.c.id == resource_id, RESOURCES.c.lease_id==lease_id) \
-            .values(updated=now, lease_id=None)
-        await session.execute(resource_update_stmt)
 
         # Update the resource queue.
         sql = """
-WITH inserted_resource_items AS (
+WITH released_leases AS (
+  UPDATE leases
+  SET tombstone = TRUE
+  WHERE id = :lease_id
+  RETURNING id as lease_id, resource_id
+), updated_resource AS (
+  UPDATE resources
+  SET lease_id = NULL
+  FROM released_leases
+  WHERE resources.lease_id = released_leases.lease_id
+  RETURNING resources.id AS resource_id, resources.channels
+), newly_free_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
-  SELECT channel, resources.id
-  FROM resources
-  CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
-  WHERE resources.id = :resource_id
-    AND resources.tombstone IS FALSE
+  SELECT channel, resource_id
+  FROM updated_resource
+    CROSS JOIN jsonb_array_elements_text(updated_resource.channels) AS channel
+  RETURNING *
+), inserted_reports AS (
+  INSERT INTO reports(id, resource_id, lease_id, report, extra)
+  SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
+          released_leases.resource_id as resource_id,
+          released_leases.lease_id AS lease_id,
+          :report AS report,
+          :report_extra AS extra
+  FROM released_leases
+  WHERE released_leases.resource_id IS NOT NULL
+  RETURNING *
+), removed_tickets AS (
+  DELETE FROM channel_ticket_queue
+  WHERE lease_id = :lease_id
+  RETURNING *
 )
-SELECT 1
+SELECT (SELECT COUNT(*) FROM released_leases) as released_leases_count,
+        (SELECT COUNT(*) FROM updated_resource) as updated_resource_count,
+        (SELECT COUNT(*) FROM newly_free_resource_items) as newly_free_resource_items_count,
+        (SELECT COUNT(*) FROM inserted_reports) as inserted_reports_count,
+        (SELECT COUNT(*) FROM removed_tickets) as removed_tickets_count
 """
         stmt = sqlalchemy.text(sql)
-        await session.execute(stmt, {'resource_id': resource_id})
+        stmt = stmt.bindparams(
+            sqlalchemy.bindparam('report', type_=String),
+            sqlalchemy.bindparam('report_extra', type_=JSONB))
+        await session.execute(stmt, {
+            'lease_id': id,
+            'report': report,
+            'report_extra': report_extra
+        })
 
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
                              channels: List[_base.ChannelID], data: str):
