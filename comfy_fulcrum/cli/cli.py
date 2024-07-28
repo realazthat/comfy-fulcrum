@@ -35,8 +35,8 @@ from ..base.fastapi_server_base import (GetReq, RegisterResourceReq,
                                         TouchTicketReq)
 from ..db.db import DBFulcrum
 from ..fastapi_client.fastapi_client import FulcrumClient
+from ..fastapi_mgmt_ui.fastapi_mgmt_ui import FulcrumUIRoutes
 from ..fastapi_server.fastapi_server import FulcrumAPIState
-from ..fastapi_ui.fastapi_ui import FulcrumUIRoutes
 
 DEFAULT_SERVICE_SLEEP_INTERVAL = 0.5
 DEFAULT_LEASE_TIMEOUT = 60.0 * 3

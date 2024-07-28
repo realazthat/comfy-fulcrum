@@ -505,7 +505,7 @@ fastapi_server_dev_pinned = [
   "yq==3.4.3",
   "zipp==3.19.2"
 ]
-fastapi_ui = [
+fastapi_mgmt_ui = [
   "aiohttp >=3,<4",
   "attr",
   "click",
@@ -520,7 +520,7 @@ fastapi_ui = [
   "orjson",
   "types-attrs"
 ]
-fastapi_ui_prod_pinned = [
+fastapi_mgmt_ui_prod_pinned = [
   "aiohttp==3.9.5",
   "aiosignal==1.3.1",
   "annotated-types==0.7.0",
@@ -572,7 +572,7 @@ fastapi_ui_prod_pinned = [
   "yarl==1.9.4",
   "zipp==3.19.2"
 ]
-fastapi_ui_dev_pinned = [
+fastapi_mgmt_ui_dev_pinned = [
   "aiohttp==3.9.5",
   "aiosignal==1.3.1",
   "annotated-types==0.7.0",
@@ -891,7 +891,7 @@ last_release = "0.0.1"
 last_stable_release = "0.0.1"
 
 [tool.setuptools.package-data]
-comfy_fulcrum = ["fastapi_ui/templates/*", "py.typed"]
+comfy_fulcrum = ["fastapi_mgmt_ui/templates/*", "py.typed"]
 
 [tool.setuptools.packages.find]
 where = ["."]

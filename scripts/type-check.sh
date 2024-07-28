@@ -44,13 +44,13 @@ python -m mypy "${PROJ_PATH}/comfy_fulcrum/fastapi_server" "${PROJ_PATH}/comfy_f
 python3 -m pyright --stats "${PROJ_PATH}/comfy_fulcrum/fastapi_server" "${PROJ_PATH}/comfy_fulcrum/base" "${PROJ_PATH}/comfy_fulcrum/private"
 
 
-VENV_PATH="${PWD}/.cache/scripts/.fastapi_ui-dev-venv" source "${PROJ_PATH}/scripts/utilities/ensure-venv.sh"
-TOML="${PROJ_PATH}/pyproject.toml" EXTRAS=fastapi_ui,dev PIN=fastapi_ui_dev_pinned \
+VENV_PATH="${PWD}/.cache/scripts/.fastapi_mgmt_ui-dev-venv" source "${PROJ_PATH}/scripts/utilities/ensure-venv.sh"
+TOML="${PROJ_PATH}/pyproject.toml" EXTRAS=fastapi_mgmt_ui,dev PIN=fastapi_mgmt_ui_dev_pinned \
   DEV_VENV_PATH="${PWD}/.cache/scripts/.venv" \
-  TARGET_VENV_PATH="${PWD}/.cache/scripts/.fastapi_ui-dev-venv" \
+  TARGET_VENV_PATH="${PWD}/.cache/scripts/.fastapi_mgmt_ui-dev-venv" \
   bash "${PROJ_PATH}/scripts/utilities/ensure-reqs2.sh"
 
-python -m mypy "${PROJ_PATH}/comfy_fulcrum/fastapi_ui" "${PROJ_PATH}/comfy_fulcrum/base" "${PROJ_PATH}/comfy_fulcrum/private" --check-untyped-defs
-python3 -m pyright --stats "${PROJ_PATH}/comfy_fulcrum/fastapi_ui" "${PROJ_PATH}/comfy_fulcrum/base" "${PROJ_PATH}/comfy_fulcrum/private"
+python -m mypy "${PROJ_PATH}/comfy_fulcrum/fastapi_mgmt_ui" "${PROJ_PATH}/comfy_fulcrum/base" "${PROJ_PATH}/comfy_fulcrum/private" --check-untyped-defs
+python3 -m pyright --stats "${PROJ_PATH}/comfy_fulcrum/fastapi_mgmt_ui" "${PROJ_PATH}/comfy_fulcrum/base" "${PROJ_PATH}/comfy_fulcrum/private"
 
 echo -e "${GREEN}All type checks ran successfully${NC}"

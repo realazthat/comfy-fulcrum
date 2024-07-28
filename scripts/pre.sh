@@ -35,8 +35,8 @@ PIN=db_dev_pinned EXTRAS=db,dev bash scripts/utilities/pin-extra-reqs2.sh
 PIN=fastapi_server_prod_pinned EXTRAS=fastapi_server,prod bash scripts/utilities/pin-extra-reqs2.sh
 PIN=fastapi_server_dev_pinned EXTRAS=fastapi_server,dev bash scripts/utilities/pin-extra-reqs2.sh
 
-PIN=fastapi_ui_prod_pinned EXTRAS=fastapi_ui,prod bash scripts/utilities/pin-extra-reqs2.sh
-PIN=fastapi_ui_dev_pinned EXTRAS=fastapi_ui,dev bash scripts/utilities/pin-extra-reqs2.sh
+PIN=fastapi_mgmt_ui_prod_pinned EXTRAS=fastapi_mgmt_ui,prod bash scripts/utilities/pin-extra-reqs2.sh
+PIN=fastapi_mgmt_ui_dev_pinned EXTRAS=fastapi_mgmt_ui,dev bash scripts/utilities/pin-extra-reqs2.sh
 
 PIN=fastapi_client_prod_pinned EXTRAS=fastapi_client,prod bash scripts/utilities/pin-extra-reqs2.sh
 PIN=fastapi_client_dev_pinned EXTRAS=fastapi_client,dev bash scripts/utilities/pin-extra-reqs2.sh
