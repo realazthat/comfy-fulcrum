@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 class Ticket(BaseModel):
+  # This is here so that pydantic can differentiate between a Ticket and a
+  # Lease when deserializing.
+  type: Literal['ticket'] = 'ticket'
   id: LeaseID
   client_name: ClientName
   lease_timeout: float
@@ -31,6 +34,9 @@ class Ticket(BaseModel):
 
 
 class Lease(BaseModel):
+  # This is here so that pydantic can differentiate between a Ticket and a
+  # Lease when deserializing.
+  type: Literal['lease'] = 'lease'
   id: LeaseID
   client_name: ClientName
   resource_id: ResourceID
