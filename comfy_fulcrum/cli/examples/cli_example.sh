@@ -49,7 +49,7 @@ PG_DIR="${TMP_DIR}/.data/pgdata"
 mkdir -p "${PG_DIR}"
 
 
-PG_READY_FILE="${PWD}/.deleteme/pg_is_ready"
+PG_READY_FILE="${TMP_DIR}/.deleteme/pg_is_ready"
 mkdir -p "$(dirname "${PG_READY_FILE}")"
 [[ -f "${PG_READY_FILE}" ]] && rm -f "${PG_READY_FILE}"
 
@@ -70,11 +70,15 @@ while [[ ! -f "${PG_READY_FILE}" ]]; do
   sleep 1
 done
 
-FULCRUM_TEST_DSN="postgresql+asyncpg://user:password@127.0.0.1:${PG_PORT}/db-name"
+DSN="postgresql+asyncpg://user:password@127.0.0.1:${PG_PORT}/db-name"
 
+(
+# SERVER_SNIPPET_START
 python -m comfy_fulcrum.cli server \
-  --dsn "${FULCRUM_TEST_DSN}" \
-  --host 0.0.0.0 --port "${FULCRUM_PORT}" & SERVER_PID=$!
+  --dsn "${DSN}" \
+  --host 0.0.0.0 --port "${FULCRUM_PORT}"
+# SERVER_SNIPPET_END
+) & SERVER_PID=$!
 FULCRUM_API_URL="http://127.0.0.1:${FULCRUM_PORT}"
 
 # Wait until curl can get the /docs page, or the PID is down.
@@ -90,6 +94,7 @@ while true; do
   sleep 1
 done
 
+# CLIENT_SNIPPET_START
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
@@ -98,7 +103,7 @@ python -m comfy_fulcrum.cli client \
 RESOURCE_A_ID=a
 python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
-  --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["c"], "data": "{\"comfy_api_url\": \"url\"}"}' \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["main"], "data": "{\"comfy_api_url\": \"url\"}"}' \
   register
 
 python -m comfy_fulcrum.cli client \
@@ -112,7 +117,7 @@ python -m comfy_fulcrum.cli client \
 
 TICKET=$(python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
-  --data '{"client_name": "me","channels": ["c"], "priority": "1"}' \
+  --data '{"client_name": "me","channels": ["main"], "priority": "1"}' \
   get)
 
 # Example TICKET:
@@ -160,6 +165,6 @@ python -m comfy_fulcrum.cli client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
-
+# CLIENT_SNIPPET_END
 
 echo -e "${GREEN}Example ran successfully${NC}"

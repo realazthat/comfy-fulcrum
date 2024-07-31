@@ -21,7 +21,7 @@ python -m comfy_fulcrum.cli --help
 ################################################################################
 
 # For each sh in examples
-find comfy_fulcrum/ -type f -name "*_example.sh" -print0 | while IFS= read -r -d '' EXAMPLE; do
+find comfy_fulcrum/ examples/ -type f -name "*_example.sh" -print0 | while IFS= read -r -d '' EXAMPLE; do
   bash "${EXAMPLE}"
   echo -e "${GREEN}${EXAMPLE} ran successfully${NC}"
 done
