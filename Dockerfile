@@ -7,6 +7,7 @@ WORKDIR /comfy_fulcrum
 # apt-get -y upgrade &&
 
 RUN apt-get -y update && apt-get -y --no-install-recommends install bash=5.2.15-2+b7 && \
+  apt-get -y --no-install-recommends install gcc build-essential libpq-dev && \
   apt-get -y clean && \
   apt-get -y autoremove && \
   rm -rf /var/lib/apt/lists/* && \
@@ -21,7 +22,7 @@ USER user
 WORKDIR /comfy_fulcrum
 ENV PATH=/home/user/.local/bin:$PATH
 ENV PYTHONPATH=/home/user/.local/lib/python3.12/site-packages
-RUN pip install --no-cache-dir --prefix=/home/user/.local .
+RUN pip install --no-cache-dir --prefix=/home/user/.local .[cli]
 
 # This is where the user will mount their data to.
 WORKDIR /data
