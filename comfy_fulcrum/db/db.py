@@ -209,6 +209,7 @@ WITH free_resources AS (
   FROM queued_tickets
     INNER JOIN free_resources USING (rn)
     INNER JOIN resources ON resources.id = free_resources.resource_id
+  ORDER BY queued_tickets.lease_id
   FOR UPDATE
 ), remove_ticket_from_queue AS (
   DELETE FROM channel_ticket_queue
