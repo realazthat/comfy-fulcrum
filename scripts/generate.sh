@@ -14,6 +14,7 @@ TOML="${PROJ_PATH}/pyproject.toml" EXTRAS=cli,dev PIN=cli_dev_pinned \
 ################################################################################
 
 bash scripts/format.sh
+bash scripts/generate-examples.sh
 bash scripts/run-all-examples.sh
 bash scripts/generate-readme.sh
 ################################################################################

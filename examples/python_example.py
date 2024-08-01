@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 # SPDX-License-Identifier: MIT
 #
 # The Comfy Fulcrum project requires contributions made to this file be licensed
@@ -25,7 +24,9 @@ from comfy_fulcrum.fastapi_server.fastapi_server import FulcrumServerRoutes
 from comfy_fulcrum.db.db import DBFulcrum
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+
 async def ServerExample(*, port: int, dsn: str):
+  # SERVER_SNIPPET_START
   app = fastapi.FastAPI()
 
   db_engine: AsyncEngine = create_async_engine(dsn,
@@ -35,14 +36,14 @@ async def ServerExample(*, port: int, dsn: str):
                                                pool_timeout=5,
                                                pool_recycle=1800)
   fulcrum = DBFulcrum(engine=db_engine,
-                      lease_timeout=60.*5,
+                      lease_timeout=60. * 5,
                       service_sleep_interval=1.0)
   await fulcrum.Initialize()
   routes = FulcrumServerRoutes(fulcrum=fulcrum)
   app.include_router(routes.Router())
 
   hypercorn_config = hypercorn.Config()
-  hypercorn_config.bind = [f'localhost:{port}']
+  hypercorn_config.bind = [f'0.0.0.0:{port}']
   hypercorn_config.use_reloader = True
   hypercorn_config.loglevel = 'debug'
   hypercorn_config.accesslog = '-'
@@ -50,8 +51,8 @@ async def ServerExample(*, port: int, dsn: str):
   hypercorn_config.debug = True
 
   await hypercorn.asyncio.serve(app, hypercorn_config)  # type: ignore
-              
-  
+  # SERVER_SNIPPET_END
+
 
 async def WaitForServer(fulcrum_api_docs_url: str, server_task: asyncio.Task):
   while True:
@@ -66,7 +67,9 @@ async def WaitForServer(fulcrum_api_docs_url: str, server_task: asyncio.Task):
       print('Waiting for server to start', file=sys.stderr)
     await asyncio.sleep(1)
 
+
 async def ProviderClientExample(fulcrum_api_url: str, comfy_api_url: str):
+  # PROVIDER_CLIENT_SNIPPET_START
 
   client = FulcrumClient(fulcrum_api_url=fulcrum_api_url)
 
@@ -74,17 +77,22 @@ async def ProviderClientExample(fulcrum_api_url: str, comfy_api_url: str):
 
   print(await client.RegisterResource(channels=[ChannelID('main')],
                                       resource_id=ResourceID(uuid.uuid4().hex),
-                                      data=json.dumps({'comfy_api_url': comfy_api_url})), file=sys.stderr)
+                                      data=json.dumps(
+                                          {'comfy_api_url': comfy_api_url})),
+        file=sys.stderr)
   print(await client.ListResources(), file=sys.stderr)
+  # PROVIDER_CLIENT_SNIPPET_END
+
 
 async def ConsumerClientExample(fulcrum_api_url: str):
+  # CONSUMER_CLIENT_SNIPPET_START
   client = FulcrumClient(fulcrum_api_url=fulcrum_api_url)
 
   print(await client.Stats(), file=sys.stderr)
 
-  lease: Union[Lease,Ticket] = await client.Get(client_name=ClientName('test'),
-                                                channels=[ChannelID('main')],
-                                                priority=1)
+  lease: Union[Lease, Ticket] = await client.Get(client_name=ClientName('test'),
+                                                 channels=[ChannelID('main')],
+                                                 priority=1)
   print(lease, file=sys.stderr)
 
   async def WaitForResource(id: LeaseID) -> Lease:
@@ -97,19 +105,20 @@ async def ConsumerClientExample(fulcrum_api_url: str):
       elif lease_or is None:
         print('Lease has expired', file=sys.stderr)
         exit(1)
-      
+
       await asyncio.sleep(1)
-  
+
   lease = await WaitForResource(id=lease.id)
 
   print(lease, file=sys.stderr)
 
-
   print(await client.Stats(), file=sys.stderr)
 
+  # Now that we have the lease, let's get the data, which we happen to know is
+  # json with the comfy_api_url as {'comfy_api_url': <url>}.
   resource_data = json.loads(lease.data)
   comfy_api_url = resource_data['comfy_api_url']
-  
+
   # Do something with the comfy_api_url here:
   print(comfy_api_url, file=sys.stderr)
   await asyncio.sleep(1)
@@ -120,8 +129,9 @@ async def ConsumerClientExample(fulcrum_api_url: str):
 
   # Once done with the lease, release it.
   await client.Release(id=lease.id, report='success', report_extra=None)
-  
+
   print(await client.Stats(), file=sys.stderr)
+  # CONSUMER_CLIENT_SNIPPET_END
 
 
 def GetFreePort() -> int:
@@ -130,6 +140,7 @@ def GetFreePort() -> int:
   addr, port = s.getsockname()
   s.close()
   return port
+
 
 async def amain():
   comfy_api_url = 'http://localhost:8188'
@@ -143,8 +154,10 @@ async def amain():
   fulcrum_api_url: str = f'http://localhost:{port}'
   fulcrum_api_docs_url: str = f'http://localhost:{port}/docs'
 
-  await WaitForServer(fulcrum_api_docs_url=fulcrum_api_docs_url, server_task=server_task)
-  await ProviderClientExample(fulcrum_api_url=fulcrum_api_url, comfy_api_url=comfy_api_url)
+  await WaitForServer(fulcrum_api_docs_url=fulcrum_api_docs_url,
+                      server_task=server_task)
+  await ProviderClientExample(fulcrum_api_url=fulcrum_api_url,
+                              comfy_api_url=comfy_api_url)
   await ConsumerClientExample(fulcrum_api_url=fulcrum_api_url)
 
   server_task.cancel()

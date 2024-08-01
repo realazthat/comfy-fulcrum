@@ -11,6 +11,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 PS4="${GREEN}$ ${NC}"
 
+
+# Don't run this in act/GH actions because act doesn't play with with nested
+# docker; the paths mess up.
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  echo -e "${YELLOW}This script is not meant to be run in GitHub Actions.${NC}"
+  exit 0
+fi
+
 PG_PID=
 SERVER_PID=
 TMP_DIR=
@@ -79,7 +87,9 @@ DSN="postgresql+asyncpg://user:password@127.0.0.1:${PG_PORT}/db-name"
 
 (
 # SERVER_SNIPPET_START
-python -m comfy_fulcrum.cli server \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 server \
   --dsn "${DSN}" \
   --host 0.0.0.0 --port "${FULCRUM_PORT}"
 # SERVER_SNIPPET_END
@@ -101,27 +111,37 @@ done
 
 : ECHO_CLIENT_SNIPPET_START
 # CLIENT_SNIPPET_START
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
 
 RESOURCE_A_ID=a
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["main"], "data": "{\"comfy_api_url\": \"url\"}"}' \
   register
 
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   list
 
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
 
-TICKET=$(python -m comfy_fulcrum.cli client \
+TICKET=$(docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"client_name": "me","channels": ["main"], "priority": "1"}' \
   get)
@@ -136,7 +156,9 @@ echo "TICKET_ID: ${TICKET_ID}"
 RESOURCE_ID=
 while [[ -z "${RESOURCE_ID}" ]]; do
   echo -e "${BLUE}Checking if resource is ready${NC}"
-  TICKET=$(python -m comfy_fulcrum.cli client \
+  TICKET=$(docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
     --fulcrum_api_url "${FULCRUM_API_URL}" \
     --data '{"id": "'"${TICKET_ID}"'"}' \
     touch)
@@ -151,23 +173,31 @@ COMFY_API_URL=$(echo "${RESOURCE_DATA}" | jq -r '.comfy_api_url')
 
 echo -e "${BLUE}COMFY_API_URL: ${COMFY_API_URL}${NC}"
 
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
 
 sleep 2
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"id": "'"${TICKET_ID}"'", "report": "success", "report_extra": {}}' \
   release
 
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"resource_id": "'"${RESOURCE_A_ID}"'"}' \
   remove
 
-python -m comfy_fulcrum.cli client \
+docker run --rm --tty --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
