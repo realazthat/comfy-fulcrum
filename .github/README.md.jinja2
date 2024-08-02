@@ -165,13 +165,15 @@ Client (resource consumer) via Python:
 Docker images are published to [ghcr.io/realazthat/{{project_name}}][23] at each
 tag.
 
-<!--{{snippet('./mdreftidy/examples/cli_example-remote-docker_example-noautorun.sh',
+Gotcha: `--tty` will output extra hidden characters.
+
+<!--{{snippet('./comfy_fulcrum/cli/examples/cli_example-remote-docker_example-noautorun.sh',
               start='# SERVER_SNIPPET_START',
               end='\n# SERVER_SNIPPET_END',
               backtickify='bash',
               decomentify='nl')|trim}}-->
 
-<!--{{snippet('./mdreftidy/examples/cli_example-remote-docker_example-noautorun.sh',
+<!--{{snippet('./comfy_fulcrum/cli/examples/cli_example-remote-docker_example-noautorun.sh',
               start='# CLIENT_SNIPPET_START',
               end='\n# CLIENT_SNIPPET_END',
               backtickify='bash',
@@ -182,7 +184,7 @@ repository.
 
 Build:
 
-<!--{{snippet('./mdreftidy/examples/cli_example-local-docker_example.sh',
+<!--{{snippet('./comfy_fulcrum/cli/examples/cli_example-local-docker_example.sh',
               start='# BUILD_SNIPPET_START',
               end='# BUILD_SNIPPET_END',
               backtickify='bash',
@@ -190,7 +192,7 @@ Build:
 
 Server:
 
-<!--{{snippet('./mdreftidy/examples/cli_example-local-docker_example.sh',
+<!--{{snippet('./comfy_fulcrum/cli/examples/cli_example-local-docker_example.sh',
               start='# SERVER_SNIPPET_START',
               end='# SERVER_SNIPPET_END',
               backtickify='bash',
@@ -198,7 +200,7 @@ Server:
 
 Client:
 
-<!--{{snippet('./mdreftidy/examples/cli_example-local-docker_example.sh',
+<!--{{snippet('./comfy_fulcrum/cli/examples/cli_example-local-docker_example.sh',
               start='# CLIENT_SNIPPET_START',
               end='# CLIENT_SNIPPET_END',
               backtickify='bash',

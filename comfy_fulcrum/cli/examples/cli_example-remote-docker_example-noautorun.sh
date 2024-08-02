@@ -87,7 +87,7 @@ DSN="postgresql+asyncpg://user:password@127.0.0.1:${PG_PORT}/db-name"
 
 (
 # SERVER_SNIPPET_START
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 server \
   --dsn "${DSN}" \
@@ -111,7 +111,7 @@ done
 
 : ECHO_CLIENT_SNIPPET_START
 # CLIENT_SNIPPET_START
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -119,27 +119,27 @@ docker run --rm --tty --network="host" \
   stats
 
 RESOURCE_A_ID=a
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["main"], "data": "{\"comfy_api_url\": \"url\"}"}' \
   register
 
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   list
 
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '' \
   stats
 
-TICKET=$(docker run --rm --tty --network="host" \
+TICKET=$(docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -156,7 +156,7 @@ echo "TICKET_ID: ${TICKET_ID}"
 RESOURCE_ID=
 while [[ -z "${RESOURCE_ID}" ]]; do
   echo -e "${BLUE}Checking if resource is ready${NC}"
-  TICKET=$(docker run --rm --tty --network="host" \
+  TICKET=$(docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
     --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -173,7 +173,7 @@ COMFY_API_URL=$(echo "${RESOURCE_DATA}" | jq -r '.comfy_api_url')
 
 echo -e "${BLUE}COMFY_API_URL: ${COMFY_API_URL}${NC}"
 
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
@@ -181,21 +181,21 @@ docker run --rm --tty --network="host" \
   stats
 
 sleep 2
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"id": "'"${TICKET_ID}"'", "report": "success", "report_extra": {}}' \
   release
 
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \
   --data '{"resource_id": "'"${RESOURCE_A_ID}"'"}' \
   remove
 
-docker run --rm --tty --network="host" \
+docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
   --fulcrum_api_url "${FULCRUM_API_URL}" \

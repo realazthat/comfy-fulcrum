@@ -233,7 +233,7 @@ Server via Python:
 ```
 <!---->
 
-Client via Python:
+Client (resource provider) via Python:
 
 <!---->
 ```py
@@ -251,6 +251,8 @@ Client via Python:
   print(await client.ListResources(), file=sys.stderr)
 ```
 <!---->
+
+Client (resource consumer) via Python:
 
 <!---->
 ```py
@@ -302,6 +304,262 @@ Client via Python:
   print(await client.Stats(), file=sys.stderr)
 ```
 <!---->
+
+## 💻 Command Line Options
+
+<!---->
+<img alt="Output of `python -m comfy_fulcrum.cli --help`" src="https://raw.githubusercontent.com/realazthat/comfy-fulcrum/v0.0.1/.github/README.help.generated.svg"/>
+<!-- -->
+
+## 🐳 Docker Image
+
+Docker images are published to [ghcr.io/realazthat/comfy-fulcrum][23] at each
+tag.
+
+Gotcha: `--tty` will output extra hidden characters.
+
+<!---->
+```bash
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 server \
+  --dsn "${DSN}" \
+  --host 0.0.0.0 --port "${FULCRUM_PORT}"
+```
+<!---->
+
+<!---->
+```bash
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+RESOURCE_A_ID=a
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["main"], "data": "{\"comfy_api_url\": \"url\"}"}' \
+  register
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  list
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+TICKET=$(docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"client_name": "me","channels": ["main"], "priority": "1"}' \
+  get)
+
+# Example TICKET:
+# {"id": "4fe26e1fe5974e68b788f82cc9460b0b", "client_name": "me", "lease_timeout": 180.0, "ends": "2024-07-21T01:18:16.317032"}
+echo "TICKET: ${TICKET}"
+
+TICKET_ID=$(echo "${TICKET}" | jq -r '.id')
+echo "TICKET_ID: ${TICKET_ID}"
+
+RESOURCE_ID=
+while [[ -z "${RESOURCE_ID}" ]]; do
+  echo -e "${BLUE}Checking if resource is ready${NC}"
+  TICKET=$(docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+    --fulcrum_api_url "${FULCRUM_API_URL}" \
+    --data '{"id": "'"${TICKET_ID}"'"}' \
+    touch)
+  echo "TICKET: ${TICKET}"
+  RESOURCE_ID=$(echo "${TICKET}" | jq -r '.resource_id')
+  echo "RESOURCE_ID: ${RESOURCE_ID}"
+  sleep 2
+done
+
+RESOURCE_DATA=$(echo "${TICKET}" | jq -r '.data')
+COMFY_API_URL=$(echo "${RESOURCE_DATA}" | jq -r '.comfy_api_url')
+
+echo -e "${BLUE}COMFY_API_URL: ${COMFY_API_URL}${NC}"
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+sleep 2
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"id": "'"${TICKET_ID}"'", "report": "success", "report_extra": {}}' \
+  release
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'"}' \
+  remove
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  ghcr.io/realazthat/comfy_fulcrum:v0.0.1 client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+```
+<!---->
+
+If you want to build the image yourself, you can use the Dockerfile in the
+repository.
+
+Build:
+
+<!---->
+```bash
+
+docker build -t my-comfy_fulcrum-image .
+
+```
+<!---->
+
+Server:
+
+<!---->
+```bash
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image server \
+  --dsn "${DSN}" \
+  --host 0.0.0.0 --port "${FULCRUM_PORT}"
+
+```
+<!---->
+
+Client:
+
+<!---->
+```bash
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+RESOURCE_A_ID=a
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'","channels": ["main"], "data": "{\"comfy_api_url\": \"url\"}"}' \
+  register
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  list
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+TICKET=$(docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"client_name": "me","channels": ["main"], "priority": "1"}' \
+  get)
+
+# Example TICKET:
+# {"id": "4fe26e1fe5974e68b788f82cc9460b0b", "client_name": "me", "lease_timeout": 180.0, "ends": "2024-07-21T01:18:16.317032"}
+echo "TICKET: ${TICKET}"
+
+TICKET_ID=$(echo "${TICKET}" | jq -r '.id')
+echo "TICKET_ID: ${TICKET_ID}"
+
+RESOURCE_ID=
+while [[ -z "${RESOURCE_ID}" ]]; do
+  echo -e "${BLUE}Checking if resource is ready${NC}"
+  TICKET=$(docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+    --fulcrum_api_url "${FULCRUM_API_URL}" \
+    --data '{"id": "'"${TICKET_ID}"'"}' \
+    touch)
+  echo "TICKET: ${TICKET}"
+  RESOURCE_ID=$(echo "${TICKET}" | jq -r '.resource_id')
+  echo "RESOURCE_ID: ${RESOURCE_ID}"
+  sleep 2
+done
+
+RESOURCE_DATA=$(echo "${TICKET}" | jq -r '.data')
+COMFY_API_URL=$(echo "${RESOURCE_DATA}" | jq -r '.comfy_api_url')
+
+echo -e "${BLUE}COMFY_API_URL: ${COMFY_API_URL}${NC}"
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+sleep 2
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"id": "'"${TICKET_ID}"'", "report": "success", "report_extra": {}}' \
+  release
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '{"resource_id": "'"${RESOURCE_A_ID}"'"}' \
+  remove
+
+docker run --rm --network="host" \
+  -v "${PWD}:/data" \
+  my-comfy_fulcrum-image client \
+  --fulcrum_api_url "${FULCRUM_API_URL}" \
+  --data '' \
+  stats
+
+```
+<!---->
+
+## 🤏 Versioning
+
+We use SemVer for versioning. For the versions available, see the tags on this
+repository.
+
+## 🔑 License
+
+This project is licensed under the MIT License - see the
+[./LICENSE.md](https://github.com/realazthat/comfy-fulcrum/blob/v0.0.1/LICENSE.md) file for details.
 
 [1]: https://raw.githubusercontent.com/realazthat/comfy-fulcrum/v0.0.1/.github/logo-exported.svg
 [2]: https://github.com/realazthat/comfy-fulcrum
