@@ -160,6 +160,22 @@ Client (resource consumer) via Python:
              rich_cols=160,
              decomentify='nl') }}-->
 
+<!--{{ shell('python -m comfy_fulcrum.cli server --help',
+             rich='README.server.help.generated.svg',
+             rich_alt='Output of `python -m comfy_fulcrum.cli server --help`',
+             rich_bg_color='black',
+             rich_term='xterm-256color',
+             rich_cols=160,
+             decomentify='nl') }}-->
+
+<!--{{ shell('python -m comfy_fulcrum.cli client --help',
+             rich='README.client.help.generated.svg',
+             rich_alt='Output of `python -m comfy_fulcrum.cli client --help`',
+             rich_bg_color='black',
+             rich_term='xterm-256color',
+             rich_cols=160,
+             decomentify='nl') }}-->
+
 ## 🐳 Docker Image
 
 Docker images are published to [ghcr.io/realazthat/{{project_name}}][23] at each

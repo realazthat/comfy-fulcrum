@@ -311,6 +311,14 @@ Client (resource consumer) via Python:
 <img src=".github/README.help.generated.svg" alt="Output of `python -m comfy_fulcrum.cli --help`" />
 <!---->
 
+<!---->
+<img src=".github/README.server.help.generated.svg" alt="Output of `python -m comfy_fulcrum.cli server --help`" />
+<!---->
+
+<!---->
+<img src=".github/README.client.help.generated.svg" alt="Output of `python -m comfy_fulcrum.cli client --help`" />
+<!---->
+
 ## 🐳 Docker Image
 
 Docker images are published to [ghcr.io/realazthat/comfy-fulcrum][23] at each
