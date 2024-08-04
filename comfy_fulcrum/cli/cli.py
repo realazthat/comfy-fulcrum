@@ -193,7 +193,9 @@ async def amain():
 
     command_p = p.add_subparsers(title='command', dest='command', required=True)
 
-    serve_p = command_p.add_parser('server', help='Run the FastAPI server.')
+    serve_p = command_p.add_parser('server',
+                                   help='Run the FastAPI server.',
+                                   formatter_class=_CustomRichHelpFormatter)
     serve_p.add_argument(
         '--dsn',
         type=str,
@@ -222,7 +224,9 @@ async def amain():
         help=
         f'The interval at which the service sleeps between iterations. In seconds. Default is {DEFAULT_LEASE_TIMEOUT:.2f} seconds.'
     )
-    client_p = command_p.add_parser('client', help='Run the FastAPI client.')
+    client_p = command_p.add_parser('client',
+                                    help='Run the FastAPI client.',
+                                    formatter_class=_CustomRichHelpFormatter)
     client_p.add_argument('--fulcrum_api_url',
                           type=str,
                           required=True,
@@ -249,13 +253,27 @@ async def amain():
     client_cmd_p = client_p.add_subparsers(title='client command',
                                            dest='client_command',
                                            required=True)
-    client_cmd_p.add_parser('list', help='List resources.')
-    client_cmd_p.add_parser('register', help='Add a resource.')
-    client_cmd_p.add_parser('remove', help='Delete a resource.')
-    client_cmd_p.add_parser('get', help='Get a resource.')
-    client_cmd_p.add_parser('touch', help='Touch a ticket/lease.')
-    client_cmd_p.add_parser('release', help='Release a ticket/lease.')
-    client_cmd_p.add_parser('stats', help='Get stats.')
+    client_cmd_p.add_parser('list',
+                            help='List resources.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('register',
+                            help='Add a resource.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('remove',
+                            help='Delete a resource.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('get',
+                            help='Get a resource.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('touch',
+                            help='Touch a ticket/lease.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('release',
+                            help='Release a ticket/lease.',
+                            formatter_class=_CustomRichHelpFormatter)
+    client_cmd_p.add_parser('stats',
+                            help='Get stats.',
+                            formatter_class=_CustomRichHelpFormatter)
 
     args = p.parse_args()
 

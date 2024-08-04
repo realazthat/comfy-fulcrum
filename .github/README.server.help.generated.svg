@@ -19,104 +19,137 @@ url(&quot;https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Bo
 font-style: bold;
 font-weight: 700;
 }
-.terminal-2581093884-matrix {
+.terminal-865198463-matrix {
 font-family: Fira Code, monospace;
 font-size: 20px;
 line-height: 24.4px;
 font-variant-east-asian: full-width;
 }
-.terminal-2581093884-title {
+.terminal-865198463-title {
 font-size: 18px;
 font-weight: bold;
 font-family: arial;
 }
-.terminal-2581093884-r1 { fill: #d9d9d9 }
+.terminal-865198463-r1 { fill: #d9d9d9 }
+.terminal-865198463-r2 { fill: #ff8700 }
+.terminal-865198463-r3 { fill: #808080 }
+.terminal-865198463-r4 { fill: #58d1eb }
+.terminal-865198463-r5 { fill: #00af87 }
 </style>
 <defs>
-<clipPath id="terminal-2581093884-clip-terminal">
+<clipPath id="terminal-865198463-clip-terminal">
 <rect x="0" y="0" width="1951.0" height="340.59999999999997"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-0">
+<clipPath id="terminal-865198463-line-0">
 <rect x="0" y="1.5" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-1">
+<clipPath id="terminal-865198463-line-1">
 <rect x="0" y="25.9" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-2">
+<clipPath id="terminal-865198463-line-2">
 <rect x="0" y="50.3" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-3">
+<clipPath id="terminal-865198463-line-3">
 <rect x="0" y="74.7" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-4">
+<clipPath id="terminal-865198463-line-4">
 <rect x="0" y="99.1" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-5">
+<clipPath id="terminal-865198463-line-5">
 <rect x="0" y="123.5" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-6">
+<clipPath id="terminal-865198463-line-6">
 <rect x="0" y="147.9" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-7">
+<clipPath id="terminal-865198463-line-7">
 <rect x="0" y="172.3" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-8">
+<clipPath id="terminal-865198463-line-8">
 <rect x="0" y="196.7" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-9">
+<clipPath id="terminal-865198463-line-9">
 <rect x="0" y="221.1" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-10">
+<clipPath id="terminal-865198463-line-10">
 <rect x="0" y="245.5" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-11">
+<clipPath id="terminal-865198463-line-11">
 <rect x="0" y="269.9" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-2581093884-line-12">
+<clipPath id="terminal-865198463-line-12">
 <rect x="0" y="294.3" width="1952" height="24.65"/>
 </clipPath>
 </defs>
 <g transform="translate(9, 0)">
-<g class="terminal-2581093884-matrix">
-<text class="terminal-2581093884-r1" x="0" y="20" textLength="524.6" clip-path="url(#terminal-2581093884-line-0)">$ python -m comfy_fulcrum.cli server --help</text>
-<text class="terminal-2581093884-r1" x="1952" y="20" textLength="12.2" clip-path="url(#terminal-2581093884-line-0)">
+<g class="terminal-865198463-matrix">
+<text class="terminal-865198463-r1" x="0" y="20" textLength="524.6" clip-path="url(#terminal-865198463-line-0)">$ python -m comfy_fulcrum.cli server --help</text>
+<text class="terminal-865198463-r1" x="1952" y="20" textLength="12.2" clip-path="url(#terminal-865198463-line-0)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="44.4" textLength="1439.6" clip-path="url(#terminal-2581093884-line-1)">usage: python -m comfy_fulcrum.cli.cli server [-h] [--dsn DSN] --host HOST --port PORT [--lease-timeout LEASE_TIMEOUT]</text>
-<text class="terminal-2581093884-r1" x="1952" y="44.4" textLength="12.2" clip-path="url(#terminal-2581093884-line-1)">
+<text class="terminal-865198463-r2" x="0" y="44.4" textLength="73.2" clip-path="url(#terminal-865198463-line-1)">Usage:</text>
+<text class="terminal-865198463-r3" x="85.4" y="44.4" textLength="463.6" clip-path="url(#terminal-865198463-line-1)">python -m comfy_fulcrum.cli.cli server</text>
+<text class="terminal-865198463-r1" x="549" y="44.4" textLength="24.4" clip-path="url(#terminal-865198463-line-1)"> [</text>
+<text class="terminal-865198463-r4" x="573.4" y="44.4" textLength="24.4" clip-path="url(#terminal-865198463-line-1)">-h</text>
+<text class="terminal-865198463-r1" x="597.8" y="44.4" textLength="36.6" clip-path="url(#terminal-865198463-line-1)">] [</text>
+<text class="terminal-865198463-r4" x="634.4" y="44.4" textLength="61" clip-path="url(#terminal-865198463-line-1)">--dsn</text>
+<text class="terminal-865198463-r5" x="707.6" y="44.4" textLength="36.6" clip-path="url(#terminal-865198463-line-1)">DSN</text>
+<text class="terminal-865198463-r1" x="744.2" y="44.4" textLength="24.4" clip-path="url(#terminal-865198463-line-1)">] </text>
+<text class="terminal-865198463-r4" x="768.6" y="44.4" textLength="73.2" clip-path="url(#terminal-865198463-line-1)">--host</text>
+<text class="terminal-865198463-r5" x="854" y="44.4" textLength="48.8" clip-path="url(#terminal-865198463-line-1)">HOST</text>
+<text class="terminal-865198463-r4" x="915" y="44.4" textLength="73.2" clip-path="url(#terminal-865198463-line-1)">--port</text>
+<text class="terminal-865198463-r5" x="1000.4" y="44.4" textLength="48.8" clip-path="url(#terminal-865198463-line-1)">PORT</text>
+<text class="terminal-865198463-r1" x="1049.2" y="44.4" textLength="24.4" clip-path="url(#terminal-865198463-line-1)"> [</text>
+<text class="terminal-865198463-r4" x="1073.6" y="44.4" textLength="183" clip-path="url(#terminal-865198463-line-1)">--lease-timeout</text>
+<text class="terminal-865198463-r5" x="1268.8" y="44.4" textLength="158.6" clip-path="url(#terminal-865198463-line-1)">LEASE_TIMEOUT</text>
+<text class="terminal-865198463-r1" x="1427.4" y="44.4" textLength="12.2" clip-path="url(#terminal-865198463-line-1)">]</text>
+<text class="terminal-865198463-r1" x="1952" y="44.4" textLength="12.2" clip-path="url(#terminal-865198463-line-1)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="68.8" textLength="1159" clip-path="url(#terminal-2581093884-line-2)">                                              [--service-sleep-interval SERVICE_SLEEP_INTERVAL]</text>
-<text class="terminal-2581093884-r1" x="1952" y="68.8" textLength="12.2" clip-path="url(#terminal-2581093884-line-2)">
+<text class="terminal-865198463-r1" x="0" y="68.8" textLength="573.4" clip-path="url(#terminal-865198463-line-2)">                                              [</text>
+<text class="terminal-865198463-r4" x="573.4" y="68.8" textLength="292.8" clip-path="url(#terminal-865198463-line-2)">--service-sleep-interval</text>
+<text class="terminal-865198463-r5" x="878.4" y="68.8" textLength="268.4" clip-path="url(#terminal-865198463-line-2)">SERVICE_SLEEP_INTERVAL</text>
+<text class="terminal-865198463-r1" x="1146.8" y="68.8" textLength="12.2" clip-path="url(#terminal-865198463-line-2)">]</text>
+<text class="terminal-865198463-r1" x="1952" y="68.8" textLength="12.2" clip-path="url(#terminal-865198463-line-2)">
 </text>
-<text class="terminal-2581093884-r1" x="1952" y="93.2" textLength="12.2" clip-path="url(#terminal-2581093884-line-3)">
+<text class="terminal-865198463-r1" x="1952" y="93.2" textLength="12.2" clip-path="url(#terminal-865198463-line-3)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="117.6" textLength="231.8" clip-path="url(#terminal-2581093884-line-4)">optional arguments:</text>
-<text class="terminal-2581093884-r1" x="1952" y="117.6" textLength="12.2" clip-path="url(#terminal-2581093884-line-4)">
+<text class="terminal-865198463-r2" x="0" y="117.6" textLength="231.8" clip-path="url(#terminal-865198463-line-4)">Optional Arguments:</text>
+<text class="terminal-865198463-r1" x="1952" y="117.6" textLength="12.2" clip-path="url(#terminal-865198463-line-4)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="142" textLength="671" clip-path="url(#terminal-2581093884-line-5)">  -h, --help            show this help message and exit</text>
-<text class="terminal-2581093884-r1" x="1952" y="142" textLength="12.2" clip-path="url(#terminal-2581093884-line-5)">
+<text class="terminal-865198463-r4" x="24.4" y="142" textLength="24.4" clip-path="url(#terminal-865198463-line-5)">-h</text>
+<text class="terminal-865198463-r1" x="48.8" y="142" textLength="24.4" clip-path="url(#terminal-865198463-line-5)">, </text>
+<text class="terminal-865198463-r4" x="73.2" y="142" textLength="73.2" clip-path="url(#terminal-865198463-line-5)">--help</text>
+<text class="terminal-865198463-r1" x="292.8" y="142" textLength="378.2" clip-path="url(#terminal-865198463-line-5)">show this help message and exit</text>
+<text class="terminal-865198463-r1" x="1952" y="142" textLength="12.2" clip-path="url(#terminal-865198463-line-5)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="166.4" textLength="1085.8" clip-path="url(#terminal-2581093884-line-6)">  --dsn DSN             DSN for the database. Falls back to FULCRUM_DSN if not specified.</text>
-<text class="terminal-2581093884-r1" x="1952" y="166.4" textLength="12.2" clip-path="url(#terminal-2581093884-line-6)">
+<text class="terminal-865198463-r4" x="24.4" y="166.4" textLength="61" clip-path="url(#terminal-865198463-line-6)">--dsn</text>
+<text class="terminal-865198463-r5" x="97.6" y="166.4" textLength="36.6" clip-path="url(#terminal-865198463-line-6)">DSN</text>
+<text class="terminal-865198463-r1" x="292.8" y="166.4" textLength="793" clip-path="url(#terminal-865198463-line-6)">DSN for the database. Falls back to FULCRUM_DSN if not specified.</text>
+<text class="terminal-865198463-r1" x="1952" y="166.4" textLength="12.2" clip-path="url(#terminal-865198463-line-6)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="190.8" textLength="707.6" clip-path="url(#terminal-2581093884-line-7)">  --host HOST           Host to run the FastAPI server on.</text>
-<text class="terminal-2581093884-r1" x="1952" y="190.8" textLength="12.2" clip-path="url(#terminal-2581093884-line-7)">
+<text class="terminal-865198463-r4" x="24.4" y="190.8" textLength="73.2" clip-path="url(#terminal-865198463-line-7)">--host</text>
+<text class="terminal-865198463-r5" x="109.8" y="190.8" textLength="48.8" clip-path="url(#terminal-865198463-line-7)">HOST</text>
+<text class="terminal-865198463-r1" x="292.8" y="190.8" textLength="414.8" clip-path="url(#terminal-865198463-line-7)">Host to run the FastAPI server on.</text>
+<text class="terminal-865198463-r1" x="1952" y="190.8" textLength="12.2" clip-path="url(#terminal-865198463-line-7)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="215.2" textLength="707.6" clip-path="url(#terminal-2581093884-line-8)">  --port PORT           Port to run the FastAPI server on.</text>
-<text class="terminal-2581093884-r1" x="1952" y="215.2" textLength="12.2" clip-path="url(#terminal-2581093884-line-8)">
+<text class="terminal-865198463-r4" x="24.4" y="215.2" textLength="73.2" clip-path="url(#terminal-865198463-line-8)">--port</text>
+<text class="terminal-865198463-r5" x="109.8" y="215.2" textLength="48.8" clip-path="url(#terminal-865198463-line-8)">PORT</text>
+<text class="terminal-865198463-r1" x="292.8" y="215.2" textLength="414.8" clip-path="url(#terminal-865198463-line-8)">Port to run the FastAPI server on.</text>
+<text class="terminal-865198463-r1" x="1952" y="215.2" textLength="12.2" clip-path="url(#terminal-865198463-line-8)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="239.6" textLength="378.2" clip-path="url(#terminal-2581093884-line-9)">  --lease-timeout LEASE_TIMEOUT</text>
-<text class="terminal-2581093884-r1" x="1952" y="239.6" textLength="12.2" clip-path="url(#terminal-2581093884-line-9)">
+<text class="terminal-865198463-r4" x="24.4" y="239.6" textLength="183" clip-path="url(#terminal-865198463-line-9)">--lease-timeout</text>
+<text class="terminal-865198463-r5" x="219.6" y="239.6" textLength="158.6" clip-path="url(#terminal-865198463-line-9)">LEASE_TIMEOUT</text>
+<text class="terminal-865198463-r1" x="1952" y="239.6" textLength="12.2" clip-path="url(#terminal-865198463-line-9)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="264" textLength="988.2" clip-path="url(#terminal-2581093884-line-10)">                        The lease timeout. In seconds. Default is 180.00 seconds.</text>
-<text class="terminal-2581093884-r1" x="1952" y="264" textLength="12.2" clip-path="url(#terminal-2581093884-line-10)">
+<text class="terminal-865198463-r1" x="292.8" y="264" textLength="695.4" clip-path="url(#terminal-865198463-line-10)">The lease timeout. In seconds. Default is 180.00 seconds.</text>
+<text class="terminal-865198463-r1" x="1952" y="264" textLength="12.2" clip-path="url(#terminal-865198463-line-10)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="288.4" textLength="597.8" clip-path="url(#terminal-2581093884-line-11)">  --service-sleep-interval SERVICE_SLEEP_INTERVAL</text>
-<text class="terminal-2581093884-r1" x="1952" y="288.4" textLength="12.2" clip-path="url(#terminal-2581093884-line-11)">
+<text class="terminal-865198463-r4" x="24.4" y="288.4" textLength="292.8" clip-path="url(#terminal-865198463-line-11)">--service-sleep-interval</text>
+<text class="terminal-865198463-r5" x="329.4" y="288.4" textLength="268.4" clip-path="url(#terminal-865198463-line-11)">SERVICE_SLEEP_INTERVAL</text>
+<text class="terminal-865198463-r1" x="1952" y="288.4" textLength="12.2" clip-path="url(#terminal-865198463-line-11)">
 </text>
-<text class="terminal-2581093884-r1" x="0" y="312.8" textLength="1500.6" clip-path="url(#terminal-2581093884-line-12)">                        The interval at which the service sleeps between iterations. In seconds. Default is 180.00 seconds.</text>
-<text class="terminal-2581093884-r1" x="1952" y="312.8" textLength="12.2" clip-path="url(#terminal-2581093884-line-12)">
+<text class="terminal-865198463-r1" x="292.8" y="312.8" textLength="1207.8" clip-path="url(#terminal-865198463-line-12)">The interval at which the service sleeps between iterations. In seconds. Default is 180.00 seconds.</text>
+<text class="terminal-865198463-r1" x="1952" y="312.8" textLength="12.2" clip-path="url(#terminal-865198463-line-12)">
 </text>
-<text class="terminal-2581093884-r1" x="1952" y="337.2" textLength="12.2" clip-path="url(#terminal-2581093884-line-13)">
+<text class="terminal-865198463-r1" x="1952" y="337.2" textLength="12.2" clip-path="url(#terminal-865198463-line-13)">
 </text>
 </g>
 </g>
