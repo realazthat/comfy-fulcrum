@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<svg xmlns="http://www.w3.org/2000/svg" class="rich-terminal" viewBox="0 0 1970 342.79999999999995">
+<svg xmlns="http://www.w3.org/2000/svg" class="rich-terminal" viewBox="0 0 1970 391.59999999999997">
 <!-- Generated with Rich textualize.io -->
 <rect width="100%" height="100%" fill="black"/>
 <style>
@@ -19,108 +19,119 @@ url(&quot;https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Bo
 font-style: bold;
 font-weight: 700;
 }
-.terminal-3670772968-matrix {
+.terminal-4151754615-matrix {
 font-family: Fira Code, monospace;
 font-size: 20px;
 line-height: 24.4px;
 font-variant-east-asian: full-width;
 }
-.terminal-3670772968-title {
+.terminal-4151754615-title {
 font-size: 18px;
 font-weight: bold;
 font-family: arial;
 }
-.terminal-3670772968-r1 { fill: #d9d9d9 }
-.terminal-3670772968-r2 { fill: #ff8700 }
-.terminal-3670772968-r3 { fill: #808080 }
-.terminal-3670772968-r4 { fill: #58d1eb }
+.terminal-4151754615-r1 { fill: #d9d9d9 }
+.terminal-4151754615-r2 { fill: #ff8700 }
+.terminal-4151754615-r3 { fill: #808080 }
+.terminal-4151754615-r4 { fill: #58d1eb }
 </style>
 <defs>
-<clipPath id="terminal-3670772968-clip-terminal">
-<rect x="0" y="0" width="1951.0" height="291.79999999999995"/>
+<clipPath id="terminal-4151754615-clip-terminal">
+<rect x="0" y="0" width="1951.0" height="340.59999999999997"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-0">
+<clipPath id="terminal-4151754615-line-0">
 <rect x="0" y="1.5" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-1">
+<clipPath id="terminal-4151754615-line-1">
 <rect x="0" y="25.9" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-2">
+<clipPath id="terminal-4151754615-line-2">
 <rect x="0" y="50.3" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-3">
+<clipPath id="terminal-4151754615-line-3">
 <rect x="0" y="74.7" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-4">
+<clipPath id="terminal-4151754615-line-4">
 <rect x="0" y="99.1" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-5">
+<clipPath id="terminal-4151754615-line-5">
 <rect x="0" y="123.5" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-6">
+<clipPath id="terminal-4151754615-line-6">
 <rect x="0" y="147.9" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-7">
+<clipPath id="terminal-4151754615-line-7">
 <rect x="0" y="172.3" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-8">
+<clipPath id="terminal-4151754615-line-8">
 <rect x="0" y="196.7" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-9">
+<clipPath id="terminal-4151754615-line-9">
 <rect x="0" y="221.1" width="1952" height="24.65"/>
 </clipPath>
-<clipPath id="terminal-3670772968-line-10">
+<clipPath id="terminal-4151754615-line-10">
 <rect x="0" y="245.5" width="1952" height="24.65"/>
+</clipPath>
+<clipPath id="terminal-4151754615-line-11">
+<rect x="0" y="269.9" width="1952" height="24.65"/>
+</clipPath>
+<clipPath id="terminal-4151754615-line-12">
+<rect x="0" y="294.3" width="1952" height="24.65"/>
 </clipPath>
 </defs>
 <g transform="translate(9, 0)">
-<g class="terminal-3670772968-matrix">
-<text class="terminal-3670772968-r1" x="0" y="20" textLength="439.2" clip-path="url(#terminal-3670772968-line-0)">$ python -m comfy_fulcrum.cli --help</text>
-<text class="terminal-3670772968-r1" x="1952" y="20" textLength="12.2" clip-path="url(#terminal-3670772968-line-0)">
+<g class="terminal-4151754615-matrix">
+<text class="terminal-4151754615-r1" x="0" y="20" textLength="439.2" clip-path="url(#terminal-4151754615-line-0)">$ python -m comfy_fulcrum.cli --help</text>
+<text class="terminal-4151754615-r1" x="1952" y="20" textLength="12.2" clip-path="url(#terminal-4151754615-line-0)">
 </text>
-<text class="terminal-3670772968-r2" x="0" y="44.4" textLength="73.2" clip-path="url(#terminal-3670772968-line-1)">Usage:</text>
-<text class="terminal-3670772968-r3" x="85.4" y="44.4" textLength="378.2" clip-path="url(#terminal-3670772968-line-1)">python -m comfy_fulcrum.cli.cli</text>
-<text class="terminal-3670772968-r1" x="463.6" y="44.4" textLength="24.4" clip-path="url(#terminal-3670772968-line-1)"> [</text>
-<text class="terminal-3670772968-r4" x="488" y="44.4" textLength="24.4" clip-path="url(#terminal-3670772968-line-1)">-h</text>
-<text class="terminal-3670772968-r1" x="512.4" y="44.4" textLength="36.6" clip-path="url(#terminal-3670772968-line-1)">] [</text>
-<text class="terminal-3670772968-r4" x="549" y="44.4" textLength="109.8" clip-path="url(#terminal-3670772968-line-1)">--version</text>
-<text class="terminal-3670772968-r1" x="658.8" y="44.4" textLength="24.4" clip-path="url(#terminal-3670772968-line-1)">] </text>
-<text class="terminal-3670772968-r4" x="683.2" y="44.4" textLength="183" clip-path="url(#terminal-3670772968-line-1)">{server,client}</text>
-<text class="terminal-3670772968-r1" x="866.2" y="44.4" textLength="48.8" clip-path="url(#terminal-3670772968-line-1)"> ...</text>
-<text class="terminal-3670772968-r1" x="1952" y="44.4" textLength="12.2" clip-path="url(#terminal-3670772968-line-1)">
+<text class="terminal-4151754615-r2" x="0" y="44.4" textLength="73.2" clip-path="url(#terminal-4151754615-line-1)">Usage:</text>
+<text class="terminal-4151754615-r3" x="85.4" y="44.4" textLength="378.2" clip-path="url(#terminal-4151754615-line-1)">python -m comfy_fulcrum.cli.cli</text>
+<text class="terminal-4151754615-r1" x="463.6" y="44.4" textLength="24.4" clip-path="url(#terminal-4151754615-line-1)"> [</text>
+<text class="terminal-4151754615-r4" x="488" y="44.4" textLength="24.4" clip-path="url(#terminal-4151754615-line-1)">-h</text>
+<text class="terminal-4151754615-r1" x="512.4" y="44.4" textLength="36.6" clip-path="url(#terminal-4151754615-line-1)">] [</text>
+<text class="terminal-4151754615-r4" x="549" y="44.4" textLength="109.8" clip-path="url(#terminal-4151754615-line-1)">--version</text>
+<text class="terminal-4151754615-r1" x="658.8" y="44.4" textLength="24.4" clip-path="url(#terminal-4151754615-line-1)">] </text>
+<text class="terminal-4151754615-r4" x="683.2" y="44.4" textLength="183" clip-path="url(#terminal-4151754615-line-1)">{server,client}</text>
+<text class="terminal-4151754615-r1" x="866.2" y="44.4" textLength="48.8" clip-path="url(#terminal-4151754615-line-1)"> ...</text>
+<text class="terminal-4151754615-r1" x="1952" y="44.4" textLength="12.2" clip-path="url(#terminal-4151754615-line-1)">
 </text>
-<text class="terminal-3670772968-r1" x="1952" y="68.8" textLength="12.2" clip-path="url(#terminal-3670772968-line-2)">
+<text class="terminal-4151754615-r1" x="1952" y="68.8" textLength="12.2" clip-path="url(#terminal-4151754615-line-2)">
 </text>
-<text class="terminal-3670772968-r2" x="0" y="93.2" textLength="231.8" clip-path="url(#terminal-3670772968-line-3)">Optional Arguments:</text>
-<text class="terminal-3670772968-r1" x="1952" y="93.2" textLength="12.2" clip-path="url(#terminal-3670772968-line-3)">
+<text class="terminal-4151754615-r1" x="0" y="93.2" textLength="780.8" clip-path="url(#terminal-4151754615-line-3)">CLI to run the Comfy Fulcrum server, client, via the DB backend.</text>
+<text class="terminal-4151754615-r1" x="1952" y="93.2" textLength="12.2" clip-path="url(#terminal-4151754615-line-3)">
 </text>
-<text class="terminal-3670772968-r4" x="24.4" y="117.6" textLength="24.4" clip-path="url(#terminal-3670772968-line-4)">-h</text>
-<text class="terminal-3670772968-r1" x="48.8" y="117.6" textLength="24.4" clip-path="url(#terminal-3670772968-line-4)">, </text>
-<text class="terminal-3670772968-r4" x="73.2" y="117.6" textLength="73.2" clip-path="url(#terminal-3670772968-line-4)">--help</text>
-<text class="terminal-3670772968-r1" x="231.8" y="117.6" textLength="378.2" clip-path="url(#terminal-3670772968-line-4)">show this help message and exit</text>
-<text class="terminal-3670772968-r1" x="1952" y="117.6" textLength="12.2" clip-path="url(#terminal-3670772968-line-4)">
+<text class="terminal-4151754615-r1" x="1952" y="117.6" textLength="12.2" clip-path="url(#terminal-4151754615-line-4)">
 </text>
-<text class="terminal-3670772968-r4" x="24.4" y="142" textLength="109.8" clip-path="url(#terminal-3670772968-line-5)">--version</text>
-<text class="terminal-3670772968-r1" x="231.8" y="142" textLength="463.6" clip-path="url(#terminal-3670772968-line-5)">show program's version number and exit</text>
-<text class="terminal-3670772968-r1" x="1952" y="142" textLength="12.2" clip-path="url(#terminal-3670772968-line-5)">
+<text class="terminal-4151754615-r2" x="0" y="142" textLength="231.8" clip-path="url(#terminal-4151754615-line-5)">Optional Arguments:</text>
+<text class="terminal-4151754615-r1" x="1952" y="142" textLength="12.2" clip-path="url(#terminal-4151754615-line-5)">
 </text>
-<text class="terminal-3670772968-r1" x="1952" y="166.4" textLength="12.2" clip-path="url(#terminal-3670772968-line-6)">
+<text class="terminal-4151754615-r4" x="24.4" y="166.4" textLength="24.4" clip-path="url(#terminal-4151754615-line-6)">-h</text>
+<text class="terminal-4151754615-r1" x="48.8" y="166.4" textLength="24.4" clip-path="url(#terminal-4151754615-line-6)">, </text>
+<text class="terminal-4151754615-r4" x="73.2" y="166.4" textLength="73.2" clip-path="url(#terminal-4151754615-line-6)">--help</text>
+<text class="terminal-4151754615-r1" x="231.8" y="166.4" textLength="378.2" clip-path="url(#terminal-4151754615-line-6)">show this help message and exit</text>
+<text class="terminal-4151754615-r1" x="1952" y="166.4" textLength="12.2" clip-path="url(#terminal-4151754615-line-6)">
 </text>
-<text class="terminal-3670772968-r2" x="0" y="190.8" textLength="97.6" clip-path="url(#terminal-3670772968-line-7)">Command:</text>
-<text class="terminal-3670772968-r1" x="1952" y="190.8" textLength="12.2" clip-path="url(#terminal-3670772968-line-7)">
+<text class="terminal-4151754615-r4" x="24.4" y="190.8" textLength="109.8" clip-path="url(#terminal-4151754615-line-7)">--version</text>
+<text class="terminal-4151754615-r1" x="231.8" y="190.8" textLength="463.6" clip-path="url(#terminal-4151754615-line-7)">show program's version number and exit</text>
+<text class="terminal-4151754615-r1" x="1952" y="190.8" textLength="12.2" clip-path="url(#terminal-4151754615-line-7)">
 </text>
-<text class="terminal-3670772968-r4" x="24.4" y="215.2" textLength="183" clip-path="url(#terminal-3670772968-line-8)">{server,client}</text>
-<text class="terminal-3670772968-r1" x="1952" y="215.2" textLength="12.2" clip-path="url(#terminal-3670772968-line-8)">
+<text class="terminal-4151754615-r1" x="1952" y="215.2" textLength="12.2" clip-path="url(#terminal-4151754615-line-8)">
 </text>
-<text class="terminal-3670772968-r4" x="48.8" y="239.6" textLength="73.2" clip-path="url(#terminal-3670772968-line-9)">server</text>
-<text class="terminal-3670772968-r1" x="231.8" y="239.6" textLength="280.6" clip-path="url(#terminal-3670772968-line-9)">Run the FastAPI server.</text>
-<text class="terminal-3670772968-r1" x="1952" y="239.6" textLength="12.2" clip-path="url(#terminal-3670772968-line-9)">
+<text class="terminal-4151754615-r2" x="0" y="239.6" textLength="97.6" clip-path="url(#terminal-4151754615-line-9)">Command:</text>
+<text class="terminal-4151754615-r1" x="1952" y="239.6" textLength="12.2" clip-path="url(#terminal-4151754615-line-9)">
 </text>
-<text class="terminal-3670772968-r4" x="48.8" y="264" textLength="73.2" clip-path="url(#terminal-3670772968-line-10)">client</text>
-<text class="terminal-3670772968-r1" x="231.8" y="264" textLength="280.6" clip-path="url(#terminal-3670772968-line-10)">Run the FastAPI client.</text>
-<text class="terminal-3670772968-r1" x="1952" y="264" textLength="12.2" clip-path="url(#terminal-3670772968-line-10)">
+<text class="terminal-4151754615-r4" x="24.4" y="264" textLength="183" clip-path="url(#terminal-4151754615-line-10)">{server,client}</text>
+<text class="terminal-4151754615-r1" x="1952" y="264" textLength="12.2" clip-path="url(#terminal-4151754615-line-10)">
 </text>
-<text class="terminal-3670772968-r1" x="1952" y="288.4" textLength="12.2" clip-path="url(#terminal-3670772968-line-11)">
+<text class="terminal-4151754615-r4" x="48.8" y="288.4" textLength="73.2" clip-path="url(#terminal-4151754615-line-11)">server</text>
+<text class="terminal-4151754615-r1" x="231.8" y="288.4" textLength="280.6" clip-path="url(#terminal-4151754615-line-11)">Run the FastAPI server.</text>
+<text class="terminal-4151754615-r1" x="1952" y="288.4" textLength="12.2" clip-path="url(#terminal-4151754615-line-11)">
+</text>
+<text class="terminal-4151754615-r4" x="48.8" y="312.8" textLength="73.2" clip-path="url(#terminal-4151754615-line-12)">client</text>
+<text class="terminal-4151754615-r1" x="231.8" y="312.8" textLength="280.6" clip-path="url(#terminal-4151754615-line-12)">Run the FastAPI client.</text>
+<text class="terminal-4151754615-r1" x="1952" y="312.8" textLength="12.2" clip-path="url(#terminal-4151754615-line-12)">
+</text>
+<text class="terminal-4151754615-r1" x="1952" y="337.2" textLength="12.2" clip-path="url(#terminal-4151754615-line-13)">
 </text>
 </g>
 </g>

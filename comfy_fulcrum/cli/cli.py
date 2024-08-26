@@ -5,6 +5,9 @@
 # The Comfy Fulcrum project requires contributions made to this file be licensed
 # under the MIT license or a compatible open source license. See LICENSE.md for
 # the license text.
+"""
+CLI to run the Comfy Fulcrum server, client, via the DB backend.
+"""
 
 import argparse
 import asyncio
@@ -193,14 +196,17 @@ async def amain():
 
     command_p = p.add_subparsers(title='command', dest='command', required=True)
 
-    serve_p = command_p.add_parser('server',
-                                   help='Run the FastAPI server.',
-                                   formatter_class=_CustomRichHelpFormatter)
+    serve_p = command_p.add_parser(
+        'server',
+        description='Run the FastAPI server, and the DB backend.',
+        help='Run the FastAPI server.',
+        formatter_class=_CustomRichHelpFormatter)
     serve_p.add_argument(
         '--dsn',
         type=str,
         required=False,
-        help='DSN for the database. Falls back to FULCRUM_DSN if not specified.'
+        help=
+        'DSN for the database. Must be an asyncio-compatible backend, e.g `postgresql+asyncpg://..`. Falls back to FULCRUM_DSN if not specified.'
     )
     serve_p.add_argument('--host',
                          type=str,
@@ -224,9 +230,12 @@ async def amain():
         help=
         f'The interval at which the service sleeps between iterations. In seconds. Default is {DEFAULT_LEASE_TIMEOUT:.2f} seconds.'
     )
-    client_p = command_p.add_parser('client',
-                                    help='Run the FastAPI client.',
-                                    formatter_class=_CustomRichHelpFormatter)
+    client_p = command_p.add_parser(
+        'client',
+        description=
+        'Run the FastAPI client, and connect to a Fulcrum FastAPI server.',
+        help='Run the FastAPI client.',
+        formatter_class=_CustomRichHelpFormatter)
     client_p.add_argument('--fulcrum_api_url',
                           type=str,
                           required=True,
