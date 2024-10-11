@@ -57,6 +57,9 @@ PG_READY_FILE="${TMP_DIR}/.deleteme/pg_is_ready"
 mkdir -p "$(dirname "${PG_READY_FILE}")"
 [[ -f "${PG_READY_FILE}" ]] && rm -f "${PG_READY_FILE}"
 
+
+touch "${TMP_DIR}/pg-script.log"
+
 PG_READY_FILE="${PG_READY_FILE}" \
 PG_DIR="${PG_DIR}" \
 PG_PORT="${PG_PORT}" \
@@ -65,12 +68,14 @@ PG_PWD=password \
 PG_SUPER_PWD=123 \
 PG_DB_NAME=db-name \
 PG_DOCKER_NAME=fulcrum-test-pg-instance \
-bash scripts/pg.sh > /dev/null 2>&1 & PG_PID=$!
+bash scripts/pg.sh > "${TMP_DIR}/pg-script.log" 2>&1 & PG_PID=$!
 
 
 # Wait until PG_READY_FILE exists
 while [[ ! -f "${PG_READY_FILE}" ]]; do
   echo -e "${BLUE}Waiting for PG to be ready${NC}"
+
+  tail -n 20 "${TMP_DIR}/pg-script.log"
   sleep 1
 done
 
