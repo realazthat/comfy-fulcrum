@@ -208,7 +208,9 @@ WITH free_resources AS (
   SELECT queued_tickets.lease_id, free_resources.resource_id, resources.data
   FROM queued_tickets
     INNER JOIN free_resources USING (rn)
+    INNER JOIN resource_free_queue ON resource_free_queue.resource_id = free_resources.resource_id
     INNER JOIN resources ON resources.id = free_resources.resource_id
+  WHERE resources.tombstone IS FALSE
   ORDER BY queued_tickets.lease_id
   FOR UPDATE
 ), remove_ticket_from_queue AS (
@@ -224,11 +226,13 @@ WITH free_resources AS (
       data = matches_.data
   FROM matches_
   WHERE id = matches_.lease_id
+    AND leases.tombstone IS FALSE
 ), updated_resources AS (
   UPDATE resources
   SET lease_id = matches_.lease_id
   FROM matches_
   WHERE id = matches_.resource_id
+    AND resources.tombstone IS FALSE
 )
 SELECT 1
 """
@@ -259,6 +263,7 @@ WITH expired_leases AS (
   FROM expired_leases INNER JOIN resources ON resources.id = expired_leases.resource_id
   CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
   WHERE resources.tombstone IS FALSE
+  FOR UPDATE
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
@@ -441,18 +446,21 @@ WITH released_leases AS (
   UPDATE leases
   SET tombstone = TRUE
   WHERE id = :lease_id
+    AND tombstone IS FALSE
   RETURNING id as lease_id, resource_id
 ), updated_resource AS (
   UPDATE resources
   SET lease_id = NULL
   FROM released_leases
   WHERE resources.lease_id = released_leases.lease_id
-  RETURNING resources.id AS resource_id, resources.channels
+    AND resources.tombstone IS FALSE
+  RETURNING *
 ), newly_free_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
   FROM updated_resource
     CROSS JOIN jsonb_array_elements_text(updated_resource.channels) AS channel
+  WHERE updated_resource.tombstone IS FALSE
   RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
@@ -523,6 +531,7 @@ WITH removed_resource AS (
   UPDATE resources
   SET tombstone = TRUE
   WHERE id = :resource_id
+    AND tombstone IS FALSE
   RETURNING *
 ), removed_resource_items AS (
   DELETE FROM resource_free_queue
@@ -581,7 +590,6 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
     channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
 
     sql = """
-
 SELECT channel, count(*) AS count
 FROM resources, jsonb_array_elements_text(resources.channels) AS channel
 WHERE tombstone IS FALSE
