@@ -24,7 +24,7 @@ from starlette.datastructures import UploadFile
 if sys.version_info >= (3, 9):
   import importlib.resources as pkg_resources
 else:
-  import importlib_resources as pkg_resources # type: ignore
+  import importlib_resources as pkg_resources  # type: ignore
 
 from ..base import base as _base
 from ..base import fastapi_server_base as _server_base
