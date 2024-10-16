@@ -11,7 +11,8 @@ import datetime
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union, overload
+from typing import (Any, Awaitable, Callable, Dict, List, Optional, Union,
+                    overload)
 
 import sqlalchemy
 from pydantic import TypeAdapter
@@ -19,8 +20,8 @@ from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
-from sqlalchemy.ext.asyncio import (AsyncConnection, AsyncEngine, AsyncResult,
-                                    AsyncSession, async_sessionmaker)
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
+                                    async_sessionmaker)
 from sqlalchemy.schema import PrimaryKeyConstraint
 from sqlalchemy.sql.expression import distinct, insert, select, update
 from typing_extensions import Literal
@@ -31,14 +32,17 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def _AutoCommit(session: AsyncSession,
-                      isolation_level: Optional[str] = None):
-  if isolation_level is not None:
-    conn: AsyncConnection = await session.connection()
-    await conn.execution_options(isolation_level='SERIALIZABLE')
+async def _AutoCommit(session: AsyncSession, *,
+                      sanity: Optional[Callable[[AsyncSession],
+                                                Awaitable[None]]]):
+
   async with session.begin():
+
+    if sanity is not None:
+      await sanity(session)
     yield session
-    await session.commit()
+    if sanity is not None:
+      await sanity(session)
 
 
 METADATA = MetaData()
@@ -142,6 +146,7 @@ class DBFulcrum(_base.FulcrumBase):
                                                    class_=AsyncSession)
     self._service_sleep_interval = service_sleep_interval
     self._service_task: Optional[asyncio.Task] = None
+    self.debug = False
 
   def close(self):
     if self._service_task is None:
@@ -167,8 +172,11 @@ class DBFulcrum(_base.FulcrumBase):
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
 
-  def _GetSession(self) -> AsyncSession:
+  async def _GetSession(self) -> AsyncSession:
     return self._async_session_maker()
+
+  def _AutoCommit(self, session: AsyncSession):
+    return _AutoCommit(session=session, sanity=self._CheckSanityIfDebug)
 
   async def _GetChannels(self, session: AsyncSession) -> List[_base.ChannelID]:
     channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
@@ -208,11 +216,15 @@ WITH free_resources AS (
   SELECT queued_tickets.lease_id, free_resources.resource_id, resources.data
   FROM queued_tickets
     INNER JOIN free_resources USING (rn)
+    -- Join this back to include it in the lock.
     INNER JOIN resource_free_queue ON resource_free_queue.resource_id = free_resources.resource_id
+    -- Join this back to include it in the lock.
     INNER JOIN resources ON resources.id = free_resources.resource_id
+    -- Join this back to include it in the lock.
+    INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = queued_tickets.lease_id
   WHERE resources.tombstone IS FALSE
   ORDER BY queued_tickets.lease_id
-  FOR UPDATE
+  FOR UPDATE OF resources, resource_free_queue, channel_ticket_queue
 ), remove_ticket_from_queue AS (
   DELETE FROM channel_ticket_queue
   WHERE lease_id IN (SELECT lease_id FROM matches_)
@@ -259,16 +271,18 @@ WITH expired_leases AS (
   WHERE lease_id IN (SELECT lease_id FROM expired_leases)
   RETURNING *
 ), newly_free_resource_items AS (
-  SELECT channel, resource_id
-  FROM expired_leases INNER JOIN resources ON resources.id = expired_leases.resource_id
-  CROSS JOIN jsonb_array_elements_text(resources.channels) AS channel
+  SELECT channel.value AS channel, expired_leases.resource_id
+  FROM expired_leases
+    INNER JOIN resources ON resources.id = expired_leases.resource_id
+    -- Join this back to include it in the lock.
+    INNER JOIN leases ON leases.id = expired_leases.lease_id
+  CROSS JOIN LATERAL jsonb_array_elements_text(resources.channels) AS channel(value)
   WHERE resources.tombstone IS FALSE
-  FOR UPDATE
+  FOR UPDATE OF resources, leases
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
   FROM newly_free_resource_items
-  ON CONFLICT DO NOTHING
 ), updated_resource AS (
   UPDATE resources
   SET lease_id = NULL
@@ -294,10 +308,12 @@ SELECT 1
 
   async def _ServiceOnce(self):
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
-        channels: List[_base.ChannelID] = await self._GetChannels(session)
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         await self._ServiceTimedoutLeases(session, now)
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
+        channels: List[_base.ChannelID] = await self._GetChannels(session)
         for channel in channels:
           await self._ServiceChannelOnce(session, channel)
 
@@ -316,8 +332,8 @@ SELECT 1
                 priority: int) -> Union[_base.Lease, _base.Ticket]:
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         ticket = _base.Ticket(id=_base.LeaseID(uuid.uuid4().hex),
                               client_name=client_name,
                               lease_timeout=self._lease_timeout,
@@ -364,8 +380,8 @@ SELECT 1
   ) -> Union[_base.Ticket, _base.Lease, None]:
 
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
 
         where_clauses = [LEASES.c.id == id, LEASES.c.tombstone.is_(False)]
 
@@ -437,8 +453,8 @@ SELECT 1
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
                     report_extra: Optional[Any]):
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
 
         # Update the resource queue.
         sql = """
@@ -457,9 +473,9 @@ WITH released_leases AS (
   RETURNING *
 ), newly_free_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
-  SELECT channel, resource_id
+  SELECT channel.value AS channel, resource_id
   FROM updated_resource
-    CROSS JOIN jsonb_array_elements_text(updated_resource.channels) AS channel
+    CROSS JOIN LATERAL jsonb_array_elements_text(updated_resource.channels) AS channel(value)
   WHERE updated_resource.tombstone IS FALSE
   RETURNING *
 ), inserted_reports AS (
@@ -495,8 +511,8 @@ SELECT (SELECT COUNT(*) FROM released_leases) as released_leases_count,
 
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
                              channels: List[_base.ChannelID], data: str):
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         sql = """
 
 WITH inserted_resource AS (
@@ -504,9 +520,9 @@ WITH inserted_resource AS (
   VALUES (:id, :channels, :data)
   RETURNING *
 ), newly_free_resource_items AS (
-  SELECT channel, inserted_resource.id AS resource_id
+  SELECT channel.value AS channel, inserted_resource.id AS resource_id
   FROM inserted_resource
-    CROSS JOIN jsonb_array_elements_text(inserted_resource.channels) AS channel
+    CROSS JOIN LATERAL jsonb_array_elements_text(inserted_resource.channels) AS channel(value)
 ), inserted_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
@@ -524,8 +540,8 @@ SELECT 1
 
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         sql = """
 WITH removed_resource AS (
   UPDATE resources
@@ -638,8 +654,8 @@ GROUP BY channel
     return channel_queue_sizes
 
   async def ListResources(self) -> List[_base.ResourceMeta]:
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
                       RESOURCES.c.inserted).where(
                           RESOURCES.c.tombstone.is_(False))
@@ -660,8 +676,8 @@ GROUP BY channel
         return resources
 
   async def Stats(self) -> _base.Stats:
-    async with self._GetSession() as session:
-      async with _AutoCommit(session):
+    async with await self._GetSession() as session:
+      async with self._AutoCommit(session):
         active_leases_task = self._ActiveLeasesCount(session=session)
         queue_size_task = self._QueueSize(session=session)
         channel_queue_sizes_task = self._ChannelQueueSize(session=session)
@@ -680,3 +696,146 @@ GROUP BY channel
                            channel_queue_sizes=channel_queue_sizes,
                            resource_count=resource_count,
                            channel_resource_counts=channel_resource_counts)
+
+  async def _CheckLeaseSanity(self, *, leases: List[RowMapping],
+                              resources: List[RowMapping],
+                              channel_ticket_queue: List[RowMapping]):
+    resource_id_2_idx = {
+        resource['id']: idx
+        for idx, resource in enumerate(resources)
+    }
+    lease_id_2_idx = {lease['id']: idx for idx, lease in enumerate(leases)}
+    key_2_idx = {
+        (ticket['channel'], ticket['id']): idx
+        for idx, ticket in enumerate(channel_ticket_queue)
+    }
+
+    lease: RowMapping
+    for lease in leases:
+      resource_id: Optional[str] = lease['resource_id']
+      if resource_id is None:
+        channels: List[str] = lease['channels']
+        assert isinstance(channels, list)
+        channel: str
+        for channel in channels:
+          assert isinstance(channel, str)
+          key = (channel, lease['id'])
+          if key not in key_2_idx:
+            raise AssertionError(
+                f'Ticket {key} is not in the channel_ticket_queue but does not have a resource_id set in the leases table'
+            )
+        continue
+
+      if not resource_id in resource_id_2_idx:
+        raise AssertionError(
+            f'Lease {lease["id"]} has a resource_id {resource_id} that is not alive in the resources table'
+        )
+      resource_idx = resource_id_2_idx[lease['resource_id']]
+      resource: RowMapping = resources[resource_idx]
+      lease_id: Optional[str] = resource['lease_id']
+      if lease_id is None:
+        raise AssertionError(
+            f'Lease {lease["id"]} has a resource_id {resource_id} that points at a resource that does not have a lease_id set'
+        )
+      if lease_id != lease['id']:
+        raise AssertionError(
+            f'Lease {lease["id"]} has a resource_id {resource_id} that points at a resource that has a different lease_id set'
+        )
+
+    for ticket in channel_ticket_queue:
+      key = (ticket['channel'], ticket['lease_id'])
+      ticket_lease_id: str = ticket['lease_id']
+      if not ticket_lease_id in lease_id_2_idx:
+        raise AssertionError(
+            f'Ticket {key} has a lease_id {ticket_lease_id} that is not alive in the leases table'
+        )
+      ticket_lease_idx = lease_id_2_idx[ticket_lease_id]
+      ticket_lease: RowMapping = leases[ticket_lease_idx]
+      ticket_resource_id: Optional[str] = ticket_lease['resource_id']
+      if ticket_resource_id is not None:
+        raise AssertionError(
+            f'Ticket {key} has a lease_id {ticket_lease_id} that points at a lease that has a resource_id set'
+        )
+
+  async def _CheckResourceSanity(self, *, leases: List[RowMapping],
+                                 resources: List[RowMapping],
+                                 resource_free_queue: List[RowMapping]):
+    lease_id_2_idx = {lease['id']: idx for idx, lease in enumerate(leases)}
+    res_id_2_idx = {
+        resource['id']: idx
+        for idx, resource in enumerate(resources)
+    }
+    key_2_free_idx = {
+        (resource['channel'], resource['resource_id']): idx
+        for idx, resource in enumerate(resource_free_queue)
+    }
+
+    resource: RowMapping
+    for resource in resources:
+      lease_id: Optional[str] = resource['lease_id']
+      if lease_id is None:
+        channels: List[str] = resource['channels']
+        assert isinstance(channels, list)
+        channel: str
+        for channel in channels:
+          assert isinstance(channel, str)
+          key = (channel, resource['id'])
+          if key not in key_2_free_idx:
+            raise AssertionError(
+                f'Resource {key} is not in the resource_free_queue but does not have a lease_id set in the resources table'
+            )
+        continue
+
+      if not lease_id in lease_id_2_idx:
+        raise AssertionError(
+            f'Resource {resource["id"]} has a lease_id {lease_id} that is not alive in the leases table'
+        )
+      lease_idx = lease_id_2_idx[resource['lease_id']]
+      lease: RowMapping = leases[lease_idx]
+      resource_id: Optional[str] = lease['resource_id']
+      if resource_id is None:
+        raise AssertionError(
+            f'Resource {resource["id"]} has a lease_id {lease_id} that points at a lease that does not have a resource_id set'
+        )
+      if resource_id != resource['id']:
+        raise AssertionError(
+            f'Resource {resource["id"]} has a lease_id {lease_id} that points at a lease that has a different resource_id set'
+        )
+
+    for free_resource in resource_free_queue:
+      key = (free_resource['channel'], free_resource['resource_id'])
+      free_resource_res_id: str = free_resource['resource_id']
+      if not free_resource_res_id in res_id_2_idx:
+        raise AssertionError(
+            f'Free resource {key} has a resource_id {free_resource_res_id} that is not alive in the resources table'
+        )
+      free_resource_idx = res_id_2_idx[free_resource_res_id]
+      free_resource_resource: RowMapping = resources[free_resource_idx]
+      free_resource_lease_id: Optional[str] = free_resource_resource['lease_id']
+      if free_resource_lease_id is not None:
+        raise AssertionError(
+            f'Free resource {key} has a resource_id {free_resource_res_id} that points at a resource that has a lease_id set'
+        )
+
+  async def _CheckSanity(self, session: AsyncSession):
+    leases: List[RowMapping] = list(
+        (await
+         session.execute(select(LEASES).where(LEASES.c.tombstone.is_(False))
+                         )).mappings())
+    resources: List[RowMapping] = list((await session.execute(
+        select(RESOURCES).where(RESOURCES.c.tombstone.is_(False)))).mappings())
+    resource_free_queue: List[RowMapping] = list(
+        (await session.execute(select(RESOURCE_FREE_QUEUE))).mappings())
+    channel_ticket_queue: List[RowMapping] = list(
+        (await session.execute(select(CHANNEL_TICKET_QUEUE))).mappings())
+
+    await self._CheckLeaseSanity(leases=leases,
+                                 resources=resources,
+                                 channel_ticket_queue=channel_ticket_queue)
+    await self._CheckResourceSanity(leases=leases,
+                                    resources=resources,
+                                    resource_free_queue=resource_free_queue)
+
+  async def _CheckSanityIfDebug(self, session: AsyncSession):
+    if self.debug:
+      await self._CheckSanity(session)

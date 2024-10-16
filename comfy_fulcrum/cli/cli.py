@@ -87,7 +87,7 @@ class _CustomRichHelpFormatter(RichHelpFormatter):
 async def _ServeCommand(*, dsn: str, host: str, port: int, lease_timeout: float,
                         service_sleep_interval: float):
 
-  db_engine = create_async_engine(dsn)
+  db_engine = create_async_engine(dsn, isolation_level='SERIALIZABLE')
   db_fulcrum = DBFulcrum(engine=db_engine,
                          lease_timeout=lease_timeout,
                          service_sleep_interval=service_sleep_interval)
