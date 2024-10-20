@@ -852,6 +852,7 @@ prod = [
 # Stuff needed for all dev pinned dependencies.
 dev = [
   "autoflake==2.3.1",
+  "build==1.2.2.post1",
   "changeguard==0.3.1",
   "isort==5.13.2",
   "mdreftidy==0.6.0",

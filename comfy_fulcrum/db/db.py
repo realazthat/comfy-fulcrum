@@ -8,6 +8,7 @@
 
 import asyncio
 import datetime
+import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ from typing import (Any, Awaitable, Callable, Dict, List, Optional, Union,
 import sqlalchemy
 from pydantic import TypeAdapter
 from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
-                        Result, String, Table, func, text)
+                        Result, String, Table, bindparam, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
@@ -175,11 +176,8 @@ class DBFulcrum(_base.FulcrumBase):
   async def _GetSession(self) -> AsyncSession:
     return self._async_session_maker()
 
-  def _AutoCommit(self, session: AsyncSession):
-    return _AutoCommit(session=session, sanity=self._CheckSanityIfDebug)
-
   async def _GetChannels(self, session: AsyncSession) -> List[_base.ChannelID]:
-    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+    channel_id_ta = TypeAdapter(_base.ChannelID)
 
     stmt = select(CHANNEL_TICKET_QUEUE.c.channel).distinct()
     result: AsyncResult = await session.stream(stmt)
@@ -207,28 +205,31 @@ WITH free_resources AS (
   SELECT resource_id, ROW_NUMBER() OVER (ORDER BY RANDOM()) AS rn
   FROM resource_free_queue
   WHERE channel = :channel
-), queued_tickets AS (
+), queued_channel_ticket_items AS (
   SELECT lease_id, ROW_NUMBER() OVER (ORDER BY priority DESC, t ASC) AS rn
   FROM channel_ticket_queue
   WHERE channel = :channel
   ORDER BY priority DESC, t ASC
 ), matches_ AS (
-  SELECT queued_tickets.lease_id, free_resources.resource_id, resources.data
-  FROM queued_tickets
+  SELECT
+    queued_channel_ticket_items.lease_id,
+    free_resources.resource_id,
+    resources.data
+  FROM queued_channel_ticket_items
     INNER JOIN free_resources USING (rn)
     -- Join this back to include it in the lock.
     INNER JOIN resource_free_queue ON resource_free_queue.resource_id = free_resources.resource_id
     -- Join this back to include it in the lock.
     INNER JOIN resources ON resources.id = free_resources.resource_id
     -- Join this back to include it in the lock.
-    INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = queued_tickets.lease_id
+    INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = queued_channel_ticket_items.lease_id
   WHERE resources.tombstone IS FALSE
-  ORDER BY queued_tickets.lease_id
+  ORDER BY queued_channel_ticket_items.lease_id
   FOR UPDATE OF resources, resource_free_queue, channel_ticket_queue
-), remove_ticket_from_queue AS (
+), delete_ticket_from_queue AS (
   DELETE FROM channel_ticket_queue
   WHERE lease_id IN (SELECT lease_id FROM matches_)
-), remove_resource_from_queue AS (
+), delete_resource_from_queue AS (
   DELETE FROM resource_free_queue
   WHERE resource_id IN (SELECT resource_id FROM matches_)
 ), update_leases AS (
@@ -261,35 +262,79 @@ SELECT 1
 
     sql = """
 WITH expired_leases AS (
+  SELECT leases.id AS lease_id, leases.resource_id
+  FROM leases
+  WHERE 1=1
+    AND ends < :now
+    AND tombstone IS FALSE
+  FOR UPDATE OF leases
+), expired_channel_ticket_items AS (
+  SELECT
+    channel_ticket_queue.channel,
+    channel_ticket_queue.lease_id
+  FROM channel_ticket_queue
+    INNER JOIN expired_leases USING (lease_id)
+  FOR UPDATE OF channel_ticket_queue
+), zombie_channel_ticket_items AS (
+  SELECT
+    channel_ticket_queue.channel,
+    channel_ticket_queue.lease_id
+  FROM channel_ticket_queue
+    LEFT OUTER JOIN leases ON leases.id = channel_ticket_queue.lease_id
+  WHERE (leases.id IS NULL OR leases.tombstone IS TRUE)
+  FOR UPDATE OF channel_ticket_queue
+), expired_resources AS (
+  SELECT resources.id as resource_id, resources.channels
+  FROM resources
+    INNER JOIN expired_leases ON expired_leases.resource_id = resources.id
+  WHERE 1=1
+    -- This is redundant, but stricter. It should always be true.
+    AND resources.tombstone IS FALSE
+    -- This is redundant, but stricter. It should always be true.
+    AND resources.lease_id = expired_leases.lease_id
+  FOR UPDATE OF resources
+), expired_resource_free_queue AS (
+  SELECT
+    resource_free_queue.channel,
+    resource_free_queue.resource_id
+  FROM resource_free_queue
+    INNER JOIN expired_resources USING (resource_id)
+  FOR UPDATE OF resource_free_queue
+), zombie_resource_free_queue AS (
+  SELECT
+    resource_free_queue.channel,
+    resource_free_queue.resource_id
+  FROM resource_free_queue
+    LEFT OUTER JOIN resources ON resources.id = resource_free_queue.resource_id
+  WHERE (resources.id IS NULL OR resources.tombstone IS TRUE)
+  FOR UPDATE OF resource_free_queue
+), newly_free_resource_items AS (
+  SELECT channel.value AS channel, expired_resources.resource_id
+  FROM expired_resources
+    CROSS JOIN LATERAL jsonb_array_elements_text(expired_resources.channels) AS channel(value)
+), updated_expired_leases AS (
   UPDATE leases
   SET tombstone = TRUE
-  WHERE ends < :now
-    AND tombstone IS FALSE
-  RETURNING id as lease_id, resource_id
-), expired_channel_ticket_queue AS (
-  DELETE FROM channel_ticket_queue
-  WHERE lease_id IN (SELECT lease_id FROM expired_leases)
-  RETURNING *
-), newly_free_resource_items AS (
-  SELECT channel.value AS channel, expired_leases.resource_id
   FROM expired_leases
-    INNER JOIN resources ON resources.id = expired_leases.resource_id
-    -- Join this back to include it in the lock.
-    INNER JOIN leases ON leases.id = expired_leases.lease_id
-  CROSS JOIN LATERAL jsonb_array_elements_text(resources.channels) AS channel(value)
-  WHERE resources.tombstone IS FALSE
-  FOR UPDATE OF resources, leases
-), inserted_resource_items AS (
+  RETURNING *
+), deleted_channel_ticket_items AS (
+  DELETE FROM channel_ticket_queue
+  USING expired_channel_ticket_items
+  WHERE 1=1
+    AND channel_ticket_queue.channel = expired_channel_ticket_items.channel
+    AND channel_ticket_queue.lease_id = expired_channel_ticket_items.lease_id
+  RETURNING *
+), inserted_free_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
   FROM newly_free_resource_items
-), updated_resource AS (
+  RETURNING *
+), updated_resources AS (
   UPDATE resources
   SET lease_id = NULL
-  FROM expired_leases
-  WHERE id = expired_leases.resource_id
-    -- This is redundant, but stricter. It should always be true.
-    AND resources.lease_id = expired_leases.lease_id
+  FROM expired_resources
+  WHERE id = expired_resources.resource_id
+  RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
   SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
@@ -299,6 +344,14 @@ WITH expired_leases AS (
          '{}'::jsonb AS extra
   FROM expired_leases
   WHERE expired_leases.resource_id IS NOT NULL
+  RETURNING *
+), deleted_zombie_channel_ticket_items AS (
+  DELETE FROM channel_ticket_queue
+  USING zombie_channel_ticket_items
+  WHERE 1=1
+    AND channel_ticket_queue.channel = zombie_channel_ticket_items.channel
+    AND channel_ticket_queue.lease_id = zombie_channel_ticket_items.lease_id
+  RETURNING *
 )
   
 SELECT 1
@@ -309,10 +362,10 @@ SELECT 1
   async def _ServiceOnce(self):
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=None):
         await self._ServiceTimedoutLeases(session, now)
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=None):
         channels: List[_base.ChannelID] = await self._GetChannels(session)
         for channel in channels:
           await self._ServiceChannelOnce(session, channel)
@@ -330,10 +383,13 @@ SELECT 1
   async def Get(self, *, client_name: _base.ClientName,
                 channels: List[_base.ChannelID],
                 priority: int) -> Union[_base.Lease, _base.Ticket]:
+    logger.debug(
+        f'Get: client_name={client_name}, channels={channels}, priority={priority}'
+    )
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         ticket = _base.Ticket(id=_base.LeaseID(uuid.uuid4().hex),
                               client_name=client_name,
                               lease_timeout=self._lease_timeout,
@@ -343,14 +399,14 @@ SELECT 1
         stmt = insert(LEASES).values(
             id=ticket.id,
             client_name=client_name,
-            channels=channels,
+            channels=bindparam('channels', type_=JSONB),
             priority=priority,
             resource_id=None,
             data=None,
             lease_timeout=self._lease_timeout,
             ends=now + datetime.timedelta(seconds=self._lease_timeout),
         )
-        await session.execute(stmt)
+        await session.execute(stmt, {'channels': channels})
 
         for channel in channels:
           stmt = insert(CHANNEL_TICKET_QUEUE).values(
@@ -359,7 +415,7 @@ SELECT 1
               priority=priority,
               t=now,
           )
-        await session.execute(stmt)
+          await session.execute(stmt)
 
         return ticket
       # TODO: If the resource can be immediately allocated, return a Lease.
@@ -381,8 +437,7 @@ SELECT 1
 
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
-
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         where_clauses = [LEASES.c.id == id, LEASES.c.tombstone.is_(False)]
 
         stmt = update(LEASES).where(*where_clauses).values(
@@ -445,18 +500,21 @@ SELECT 1
 
   async def TouchTicket(
       self, *, id: _base.LeaseID) -> Union[_base.Lease, _base.Ticket, None]:
+    logger.debug(f'TouchTicket: with id={id}')
     return await self._Touch(id=id, type='ticket_or_lease')
 
   async def TouchLease(self, *, id: _base.LeaseID) -> Optional[_base.Lease]:
+    logger.debug(f'TouchLease: with id={id}')
     return await self._Touch(id=id, type='lease')
 
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
                     report_extra: Optional[Any]):
+    logger.debug(
+        f'Release: lease with id={id}, report={report}, report_extra={report_extra}'
+    )
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
-
-        # Update the resource queue.
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         sql = """
 WITH released_leases AS (
   UPDATE leases
@@ -469,6 +527,8 @@ WITH released_leases AS (
   SET lease_id = NULL
   FROM released_leases
   WHERE resources.lease_id = released_leases.lease_id
+    -- This is redundant, but stricter. It should always be true.
+    AND resources.id = released_leases.resource_id
     AND resources.tombstone IS FALSE
   RETURNING *
 ), newly_free_resource_items AS (
@@ -478,9 +538,13 @@ WITH released_leases AS (
     CROSS JOIN LATERAL jsonb_array_elements_text(updated_resource.channels) AS channel(value)
   WHERE updated_resource.tombstone IS FALSE
   RETURNING *
+), deleted_channel_ticket_items AS (
+  DELETE FROM channel_ticket_queue
+  WHERE lease_id = :lease_id
+  RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
-  SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
+  SELECT gen_random_uuid() AS report_id,
           released_leases.resource_id as resource_id,
           released_leases.lease_id AS lease_id,
           :report AS report,
@@ -488,33 +552,35 @@ WITH released_leases AS (
   FROM released_leases
   WHERE released_leases.resource_id IS NOT NULL
   RETURNING *
-), removed_tickets AS (
-  DELETE FROM channel_ticket_queue
-  WHERE lease_id = :lease_id
-  RETURNING *
 )
 SELECT (SELECT COUNT(*) FROM released_leases) as released_leases_count,
         (SELECT COUNT(*) FROM updated_resource) as updated_resource_count,
         (SELECT COUNT(*) FROM newly_free_resource_items) as newly_free_resource_items_count,
         (SELECT COUNT(*) FROM inserted_reports) as inserted_reports_count,
-        (SELECT COUNT(*) FROM removed_tickets) as removed_tickets_count
+        (SELECT COUNT(*) FROM deleted_channel_ticket_items) as deleted_channel_ticket_items_count
 """
         stmt = sqlalchemy.text(sql)
         stmt = stmt.bindparams(
             sqlalchemy.bindparam('report', type_=String),
             sqlalchemy.bindparam('report_extra', type_=JSONB))
-        await session.execute(stmt, {
-            'lease_id': id,
-            'report': report,
-            'report_extra': report_extra
-        })
+        await session.execute(
+            stmt, {
+                'lease_id':
+                id,
+                'report':
+                report,
+                'report_extra': (report_extra if report_extra is not None else
+                                 json.dumps(None)),
+            })
 
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
                              channels: List[_base.ChannelID], data: str):
+    logger.debug(
+        f'RegisterResource: resource_id={resource_id}, channels={channels}, data={data}'
+    )
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         sql = """
-
 WITH inserted_resource AS (
   INSERT INTO resources(id, channels, data)
   VALUES (:id, :channels, :data)
@@ -523,7 +589,7 @@ WITH inserted_resource AS (
   SELECT channel.value AS channel, inserted_resource.id AS resource_id
   FROM inserted_resource
     CROSS JOIN LATERAL jsonb_array_elements_text(inserted_resource.channels) AS channel(value)
-), inserted_resource_items AS (
+), inserted_free_resource_items AS (
   INSERT INTO resource_free_queue(channel, resource_id)
   SELECT channel, resource_id
   FROM newly_free_resource_items
@@ -540,28 +606,59 @@ SELECT 1
 
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
+    logger.debug(f'RemoveResource: resource_id={resource_id}')
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         sql = """
-WITH removed_resource AS (
-  UPDATE resources
-  SET tombstone = TRUE
+-- Lock leases first, to be consistent in lock order, and to avoid deadlocks.
+WITH stale_leases AS (
+  SELECT leases.id as lease_id
+  FROM leases
+  WHERE resource_id = :resource_id
+    AND tombstone IS FALSE
+  FOR UPDATE OF leases
+), stale_channel_ticket_items AS (
+  SELECT channel, lease_id
+  FROM channel_ticket_queue
+    INNER JOIN stale_leases USING (lease_id)
+  FOR UPDATE OF channel_ticket_queue
+), stale_resources AS (
+  SELECT resources.id as resource_id
+  FROM resources
   WHERE id = :resource_id
     AND tombstone IS FALSE
-  RETURNING *
-), removed_resource_items AS (
-  DELETE FROM resource_free_queue
+  FOR UPDATE OF resources
+), stale_free_resource_items AS (
+  SELECT channel, resource_id
+  FROM resource_free_queue
   WHERE resource_id = :resource_id
-  RETURNING *
-), stale_leases AS (
+  FOR UPDATE OF resource_free_queue
+), updated_stale_leases AS (
   UPDATE leases
   SET tombstone = TRUE
   WHERE resource_id = :resource_id
   RETURNING *
+), deleted_channel_ticket_items AS (
+  DELETE FROM channel_ticket_queue
+  USING stale_channel_ticket_items
+  WHERE stale_channel_ticket_items.lease_id = channel_ticket_queue.lease_id
+  RETURNING *
+), updated_resources AS (
+  UPDATE resources
+  SET tombstone = TRUE
+  FROM stale_resources
+  WHERE resources.id = stale_resources.resource_id
+  RETURNING *
+), deleted_free_resource_items AS (
+  DELETE FROM resource_free_queue
+  WHERE resource_id = :resource_id
+  RETURNING *
 )
-SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
-       (SELECT COUNT(*) FROM removed_resource_items) as removed_resource_items_count,
-       (SELECT COUNT(*) FROM stale_leases) as stale_leases_count
+
+SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
+       (SELECT COUNT(*) FROM deleted_free_resource_items) as deleted_free_resource_items_count,
+       (SELECT COUNT(*) FROM stale_leases) as stale_leases_count,
+       (SELECT COUNT(*) FROM deleted_channel_ticket_items) as deleted_channel_ticket_items_count
 """
         stmt = sqlalchemy.text(sql)
         stmt = stmt.bindparams(sqlalchemy.bindparam('resource_id',
@@ -572,13 +669,16 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
         row = result.mappings().first()
         if row is None:
           raise AssertionError('Expected a row, got None')
-        removed_resource_count = row.removed_resource_count
-        removed_resource_items_count = row.removed_resource_items_count
+        removed_resources_count = row.removed_resources_count
+        deleted_free_resource_items_count = row.deleted_free_resource_items_count
         stale_leases_count = row.stale_leases_count
+        deleted_channel_ticket_items_count = row.deleted_channel_ticket_items_count
         return _base.RemovedResourceInfo(
-            removed_resource_count=removed_resource_count,
-            removed_resource_items_count=removed_resource_items_count,
+            removed_resources_count=removed_resources_count,
+            deleted_free_resource_items_count=deleted_free_resource_items_count,
             stale_leases_count=stale_leases_count,
+            deleted_channel_ticket_items_count=
+            deleted_channel_ticket_items_count,
         )
 
   async def _ActiveLeasesCount(self, *, session: AsyncSession) -> int:
@@ -603,7 +703,7 @@ SELECT (SELECT COUNT(*) FROM removed_resource) as removed_resource_count,
 
   async def _ChannelResourceCounts(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
-    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+    channel_id_ta = TypeAdapter(_base.ChannelID)
 
     sql = """
 SELECT channel, count(*) AS count
@@ -636,7 +736,7 @@ GROUP BY channel
 
   async def _ChannelQueueSize(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
-    channel_id_ta = TypeAdapter[_base.ChannelID](_base.ChannelID)
+    channel_id_ta = TypeAdapter(_base.ChannelID)
 
     stmt = select(
         CHANNEL_TICKET_QUEUE.c.channel,
@@ -655,7 +755,7 @@ GROUP BY channel
 
   async def ListResources(self) -> List[_base.ResourceMeta]:
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
                       RESOURCES.c.inserted).where(
                           RESOURCES.c.tombstone.is_(False))
@@ -677,7 +777,7 @@ GROUP BY channel
 
   async def Stats(self) -> _base.Stats:
     async with await self._GetSession() as session:
-      async with self._AutoCommit(session):
+      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         active_leases_task = self._ActiveLeasesCount(session=session)
         queue_size_task = self._QueueSize(session=session)
         channel_queue_sizes_task = self._ChannelQueueSize(session=session)
@@ -694,8 +794,8 @@ GROUP BY channel
         return _base.Stats(active_leases=active_leases,
                            queue_size=queue_size,
                            channel_queue_sizes=channel_queue_sizes,
-                           resource_count=resource_count,
-                           channel_resource_counts=channel_resource_counts)
+                           resources_count=resource_count,
+                           channel_resources_counts=channel_resource_counts)
 
   async def _CheckLeaseSanity(self, *, leases: List[RowMapping],
                               resources: List[RowMapping],
@@ -706,7 +806,7 @@ GROUP BY channel
     }
     lease_id_2_idx = {lease['id']: idx for idx, lease in enumerate(leases)}
     key_2_idx = {
-        (ticket['channel'], ticket['id']): idx
+        (ticket['channel'], ticket['lease_id']): idx
         for idx, ticket in enumerate(channel_ticket_queue)
     }
 
@@ -726,7 +826,7 @@ GROUP BY channel
             )
         continue
 
-      if not resource_id in resource_id_2_idx:
+      if resource_id not in resource_id_2_idx:
         raise AssertionError(
             f'Lease {lease["id"]} has a resource_id {resource_id} that is not alive in the resources table'
         )
@@ -745,7 +845,7 @@ GROUP BY channel
     for ticket in channel_ticket_queue:
       key = (ticket['channel'], ticket['lease_id'])
       ticket_lease_id: str = ticket['lease_id']
-      if not ticket_lease_id in lease_id_2_idx:
+      if ticket_lease_id not in lease_id_2_idx:
         raise AssertionError(
             f'Ticket {key} has a lease_id {ticket_lease_id} that is not alive in the leases table'
         )
@@ -786,7 +886,7 @@ GROUP BY channel
             )
         continue
 
-      if not lease_id in lease_id_2_idx:
+      if lease_id not in lease_id_2_idx:
         raise AssertionError(
             f'Resource {resource["id"]} has a lease_id {lease_id} that is not alive in the leases table'
         )
@@ -805,7 +905,7 @@ GROUP BY channel
     for free_resource in resource_free_queue:
       key = (free_resource['channel'], free_resource['resource_id'])
       free_resource_res_id: str = free_resource['resource_id']
-      if not free_resource_res_id in res_id_2_idx:
+      if free_resource_res_id not in res_id_2_idx:
         raise AssertionError(
             f'Free resource {key} has a resource_id {free_resource_res_id} that is not alive in the resources table'
         )

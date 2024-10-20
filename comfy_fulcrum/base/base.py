@@ -53,17 +53,18 @@ class ResourceMeta(BaseModel):
 
 
 class RemovedResourceInfo(BaseModel):
-  removed_resource_count: int
-  removed_resource_items_count: int
+  removed_resources_count: int
+  deleted_free_resource_items_count: int
   stale_leases_count: int
+  deleted_channel_ticket_items_count: int
 
 
 class Stats(BaseModel):
   active_leases: int
   queue_size: int
   channel_queue_sizes: Dict[ChannelID, int]
-  resource_count: int
-  channel_resource_counts: Dict[ChannelID, int]
+  resources_count: int
+  channel_resources_counts: Dict[ChannelID, int]
 
 
 class FulcrumBase(ABC):

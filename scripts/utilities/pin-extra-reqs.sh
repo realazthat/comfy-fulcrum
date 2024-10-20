@@ -52,6 +52,7 @@ else
 
   PINNED_REQ_DIR=$(dirname "${PINNED_REQ_FILE}")
   mkdir -p "${PINNED_REQ_DIR}"
+  python -m pip install pip-tools
   python -m piptools compile --generate-hashes \
     --extra "${EXTRA}" \
     "${TOML}" \

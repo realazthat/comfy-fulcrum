@@ -10,6 +10,7 @@ BUMP=${BUMP:-""}
 DEVELOP_BRANCH=${DEVELOP_BRANCH:-"develop"}
 MASTER_BRANCH=${MASTER_BRANCH:-"master"}
 DRY=${DRY:-"true"}
+TOML=${TOML:-"./pyproject.toml"}
 ################################################################################
 if [[ "${BUMP}" != "major" && "${BUMP}" != "minor" && "${BUMP}" != "patch" && "${BUMP}" != "prerelease" && "${BUMP}" != "build" ]]; then
   echo -e "${RED}BUMP is not set. Please set it to one of the following: major, minor, patch, prerelease, or build.${NC}"
@@ -35,12 +36,6 @@ fi
 ################################################################################
 REPO_URL=$(git remote get-url origin)
 ################################################################################
-VENV_PATH="${PWD}/.cache/scripts/.dev-venv" source "${PROJ_PATH}/scripts/utilities/ensure-venv.sh"
-TOML="${PROJ_PATH}/pyproject.toml" EXTRAS=dev PIN=dev_pinned \
-  DEV_VENV_PATH="${PWD}/.cache/scripts/.venv" \
-  TARGET_VENV_PATH="${PWD}/.cache/scripts/.dev-venv" \
-  bash "${PROJ_PATH}/scripts/utilities/ensure-reqs2.sh"
-################################################################################
 TMP_DIR=$(mktemp -d)
 trap 'chmod -R +w "${TMP_DIR}" && rm -rf "${TMP_DIR}"' EXIT
 
@@ -57,29 +52,29 @@ git pull origin "${DEVELOP_BRANCH}"
 git fetch --tags
 
 echo -e "${BLUE}Current Branch: $(git branch)${NC}"
-OLD_VERSION=$(tomlq -r -e '.["project"]["version"]' "./pyproject.toml")
+OLD_VERSION=$(tomlq -r -e '.["project"]["version"]' "${TOML}")
 
 echo -e "${BLUE}Current Version: ${OLD_VERSION}${NC}"
 
 echo -e "${BLUE}Bumping Version${NC}"
 python "${PROJ_PATH}/scripts/utilities/bump.py" \
   --bump-type "${BUMP}" \
-  --toml "./pyproject.toml"
-git status
-VERSION=$(tomlq -r -e '.["project"]["version"]' "./pyproject.toml")
+  --toml "${TOML}"
+git --no-pager status
+VERSION=$(tomlq -r -e '.["project"]["version"]' "${TOML}")
 GIT_TAG="v${VERSION}"
 echo -e "${BLUE}New Version: ${VERSION}${NC}"
 echo -e "${BLUE}${OLD_VERSION} -> ${VERSION}${NC}"
 
-cat "./pyproject.toml"
+git --no-pager diff
 
 bash scripts/generate.sh
-git status
-bash scripts/utilities/pre.sh
+git --no-pager status
+# bash scripts/pre.sh
 
 # Stage all changes, but not untracked files.
 git add -u
-git status
+git --no-pager status
 
 git commit -m "Prepare Release ${VERSION}"
 

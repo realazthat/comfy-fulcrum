@@ -92,6 +92,10 @@ DSN="postgresql+asyncpg://user:password@127.0.0.1:${PG_PORT}/db-name"
 
 (
 # SERVER_SNIPPET_START
+
+# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
+
 docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 server \

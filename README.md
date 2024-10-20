@@ -117,6 +117,10 @@ Server via CLI:
 <!---->
 ```bash
 
+
+# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
+
 python -m comfy_fulcrum.cli server \
   --dsn "${DSN}" \
   --host 0.0.0.0 --port "${FULCRUM_PORT}"
@@ -329,6 +333,10 @@ Gotcha: `--tty` will output extra hidden characters.
 <!---->
 ```bash
 
+
+# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
+
 docker run --rm --network="host" \
   -v "${PWD}:/data" \
   ghcr.io/realazthat/comfy_fulcrum:v0.0.1 server \
@@ -450,6 +458,10 @@ Server:
 
 <!---->
 ```bash
+
+
+# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
 
 docker run --rm --network="host" \
   -v "${PWD}:/data" \

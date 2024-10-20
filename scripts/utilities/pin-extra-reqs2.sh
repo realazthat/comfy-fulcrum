@@ -42,6 +42,10 @@ export FILE="${TOML}"
 export TOUCH_FILE="${PINNED_REQ_TOUCH_FILE}"
 
 EXTRA_FLAGS=$(echo "${EXTRAS}" | python -c 'import sys; import shlex; extras=sys.stdin.read().split(","); print("\n".join([f" --extra {extra}" for extra in extras]))')
+# Add --extra ${PIN} to the EXTRA_FLAGS. This way previous pins are sticky. To
+# change them, they have to be changed explicitly. Otherwise there will be a
+# conflict.
+EXTRA_FLAGS="${EXTRA_FLAGS} --extra ${PIN}"
 
 if bash "${PROJ_PATH}/scripts/utilities/is_not_dirty.sh"; then
   echo -e "${GREEN}Requirements ${PINNED_REQ_FILE} are up to date${NC}"

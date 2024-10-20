@@ -92,15 +92,15 @@ if not isinstance(opt_deps, tomlkit.items.Table):
       f'Invalid pyproject.toml file, expected "project.optional-dependencies" to be a table. Got {type(opt_deps)}.'
   )
 
-for extra in extras + [pin]:
-  if extra not in opt_deps:
+for extra_or_pin in extras + [pin]:
+  if extra_or_pin not in opt_deps:
     raise ValueError(
-        f'Invalid pyproject.toml file, expected "project.optional-dependencies" to contain {extra}.'
+        f'Invalid pyproject.toml file, expected "project.optional-dependencies" to contain {extra_or_pin}.'
     )
-  toml_extra_dependencies = opt_deps[extra]
+  toml_extra_dependencies = opt_deps[extra_or_pin]
   if not isinstance(toml_extra_dependencies, tomlkit.items.Array):
     raise ValueError(
-        f'Invalid pyproject.toml file, expected "project.optional-dependencies.{extra}" to be an array. Got {type(toml_extra_dependencies)}.'
+        f'Invalid pyproject.toml file, expected "project.optional-dependencies.{extra_or_pin}" to be an array. Got {type(toml_extra_dependencies)}.'
     )
 
 if sorted(list(toml_extra_dependencies)) == sorted(existing_dependencies):
