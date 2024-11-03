@@ -16,6 +16,7 @@ from typing import (Any, Awaitable, Callable, Dict, List, Optional, Union,
                     overload)
 
 import sqlalchemy
+from asyncpg import SerializationError
 from pydantic import TypeAdapter
 from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, bindparam, func, text)
@@ -25,9 +26,11 @@ from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
                                     async_sessionmaker)
 from sqlalchemy.schema import PrimaryKeyConstraint
 from sqlalchemy.sql.expression import distinct, insert, select, update
+from tenacity import retry_if_exception_type, wait_exponential_jitter
 from typing_extensions import Literal
 
 from ..base import base as _base
+from ..private.utilities import instance_retry
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +167,11 @@ class DBFulcrum(_base.FulcrumBase):
     self.debug = False
     self._uuid_gen_func: Optional[Literal['gen_random_uuid',
                                           'uuid_generate_v4']] = None
+    self.tenacity_kwargs = {
+        'retry': retry_if_exception_type((SerializationError)),
+        # 'stop': stop_after_attempt(3),
+        'wait': wait_exponential_jitter(initial=1.0),
+    }
 
   def close(self):
     if self._service_task is None:
@@ -215,6 +223,7 @@ class DBFulcrum(_base.FulcrumBase):
       channels.append(channel_id_ta.validate_python(row.channel))
     return channels
 
+  @instance_retry()
   async def _ServiceChannelOnce(self, session: AsyncSession,
                                 channel: _base.ChannelID):
 
@@ -280,6 +289,7 @@ SELECT 1
     stmt = sqlalchemy.text(sql)
     await session.execute(stmt, {'channel': channel})
 
+  @instance_retry()
   async def _ServiceTimedoutLeases(self, session: AsyncSession,
                                    now: datetime.datetime):
     # Update all leases that have timed out.
@@ -408,6 +418,7 @@ SELECT 1
       except Exception:
         logger.exception('Error in DBFulcrum._Service, retrying')
 
+  @instance_retry()
   async def Get(self, *, client_name: _base.ClientName,
                 channels: List[_base.ChannelID],
                 priority: int) -> Union[_base.Lease, _base.Ticket]:
@@ -526,15 +537,18 @@ SELECT 1
 
       # TODO: If the resource can be immediately allocated, return a Lease.
 
+  @instance_retry()
   async def TouchTicket(
       self, *, id: _base.LeaseID) -> Union[_base.Lease, _base.Ticket, None]:
     logger.debug(f'TouchTicket: with id={id}')
     return await self._Touch(id=id, type='ticket_or_lease')
 
+  @instance_retry()
   async def TouchLease(self, *, id: _base.LeaseID) -> Optional[_base.Lease]:
     logger.debug(f'TouchLease: with id={id}')
     return await self._Touch(id=id, type='lease')
 
+  @instance_retry()
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
                     report_extra: Optional[Any]):
@@ -601,6 +615,7 @@ SELECT (SELECT COUNT(*) FROM released_leases) as released_leases_count,
                                  json.dumps(None)),
             })
 
+  @instance_retry()
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
                              channels: List[_base.ChannelID], data: str):
     logger.debug(
@@ -632,6 +647,7 @@ SELECT 1
             'data': data,
         })
 
+  @instance_retry()
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     logger.debug(f'RemoveResource: resource_id={resource_id}')
@@ -709,6 +725,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
             deleted_channel_ticket_items_count,
         )
 
+  @instance_retry()
   async def _ActiveLeasesCount(self, *, session: AsyncSession) -> int:
     stmt = select(func.count(distinct(LEASES.c.id)).label('count')).where(
         LEASES.c.tombstone.is_(False), LEASES.c.resource_id.isnot(None))
@@ -719,6 +736,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
       raise ValueError(f'Expected int, got {type(leases)}: {leases}')
     return leases
 
+  @instance_retry()
   async def _ResourceCount(self, *, session: AsyncSession) -> int:
     stmt = select(func.count(distinct(RESOURCES.c.id)).label('count')).where(
         RESOURCES.c.tombstone.is_(False))
@@ -729,6 +747,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
       raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
     return queue_size
 
+  @instance_retry()
   async def _ChannelResourceCounts(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
     channel_id_ta = TypeAdapter(_base.ChannelID)
@@ -752,6 +771,7 @@ GROUP BY channel
       channel_resource_counts[channel] = count
     return channel_resource_counts
 
+  @instance_retry()
   async def _QueueSize(self, *, session: AsyncSession) -> int:
     stmt = select(
         func.count(distinct(CHANNEL_TICKET_QUEUE.c.lease_id)).label('count'))
@@ -762,6 +782,7 @@ GROUP BY channel
       raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
     return queue_size
 
+  @instance_retry()
   async def _ChannelQueueSize(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
     channel_id_ta = TypeAdapter(_base.ChannelID)
@@ -781,6 +802,7 @@ GROUP BY channel
       channel_queue_sizes[channel] = count
     return channel_queue_sizes
 
+  @instance_retry()
   async def ListResources(self) -> List[_base.ResourceMeta]:
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
@@ -803,6 +825,7 @@ GROUP BY channel
                                  inserted=inserted))
         return resources
 
+  @instance_retry()
   async def Stats(self) -> _base.Stats:
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
@@ -945,6 +968,7 @@ GROUP BY channel
             f'Free resource {key} has a resource_id {free_resource_res_id} that points at a resource that has a lease_id set'
         )
 
+  @instance_retry()
   async def _CheckSanity(self, session: AsyncSession):
     leases: List[RowMapping] = list(
         (await
