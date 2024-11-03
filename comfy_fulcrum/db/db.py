@@ -135,6 +135,20 @@ CHANNEL_TICKET_QUEUE = Table(
 )
 
 
+async def _IsGenUUIDAvailable(engine: AsyncEngine, uuid_gen_func: str) -> bool:
+  session_maker = async_sessionmaker(engine,
+                                     expire_on_commit=False,
+                                     class_=AsyncSession)
+  async with session_maker() as session:
+    async with session.begin():
+      try:
+        result = await session.execute(text(f'SELECT {uuid_gen_func}()'))
+        result.fetchone()
+      except Exception:
+        return False
+      return True
+
+
 class DBFulcrum(_base.FulcrumBase):
 
   def __init__(self, *, engine: AsyncEngine, lease_timeout: float,
@@ -148,6 +162,8 @@ class DBFulcrum(_base.FulcrumBase):
     self._service_sleep_interval = service_sleep_interval
     self._service_task: Optional[asyncio.Task] = None
     self.debug = False
+    self._uuid_gen_func: Optional[Literal['gen_random_uuid',
+                                          'uuid_generate_v4']] = None
 
   def close(self):
     if self._service_task is None:
@@ -164,6 +180,18 @@ class DBFulcrum(_base.FulcrumBase):
       pass
 
   async def Initialize(self):
+    uuid_gen_funcs = ['gen_random_uuid', 'uuid_generate_v4']
+    for uuid_gen_func in uuid_gen_funcs:
+      if await _IsGenUUIDAvailable(self._engine, uuid_gen_func):
+        validator: TypeAdapter[Literal['gen_random_uuid', 'uuid_generate_v4']]
+        validator = TypeAdapter(Literal['gen_random_uuid', 'uuid_generate_v4'])
+        self._uuid_gen_func = validator.validate_python(uuid_gen_func)
+        break
+    else:
+      raise RuntimeError(
+          'gen_random_uuid() or uuid_generate_v4() is not available. Please enable the pgcrypto or uuid-ossp extension.'
+      )
+
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.create_all)
     self._service_task = asyncio.create_task(
@@ -515,7 +543,7 @@ SELECT 1
     )
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
-        sql = """
+        sql = f"""
 WITH released_leases AS (
   UPDATE leases
   SET tombstone = TRUE
@@ -544,7 +572,7 @@ WITH released_leases AS (
   RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
-  SELECT gen_random_uuid() AS report_id,
+  SELECT {self._uuid_gen_func}() AS report_id,
           released_leases.resource_id as resource_id,
           released_leases.lease_id AS lease_id,
           :report AS report,

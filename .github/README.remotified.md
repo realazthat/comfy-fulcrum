@@ -118,7 +118,8 @@ Server via CLI:
 ```bash
 
 
-# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# NOTE: You must have PostgreSQL's uuid-ossp or pgcrypto extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
 
 python -m comfy_fulcrum.cli server \
@@ -334,7 +335,8 @@ Gotcha: `--tty` will output extra hidden characters.
 ```bash
 
 
-# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# NOTE: You must have PostgreSQL's uuid-ossp or pgcrypto extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
 
 docker run --rm --network="host" \
@@ -460,7 +462,8 @@ Server:
 ```bash
 
 
-# NOTE: You must have PostgreSQL's uuid-ossp extension installed.
+# NOTE: You must have PostgreSQL's uuid-ossp or pgcrypto extension installed.
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
 
 docker run --rm --network="host" \
