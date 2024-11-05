@@ -64,4 +64,10 @@ find comfy_fulcrum -name "*_test.sh" -print0 | while IFS= read -r -d '' TEST_FIL
   echo -e "${GREEN}${TEST_FILE} ran successfully${NC}"
 done
 
+# Includes long-running tests.
+# TODO: Use a proper testing framework that will run these in parallel.
+find tests/ -name "*_test.py" | while read -r TEST_FILE; do
+  python "${TEST_FILE}"
+done
+
 echo -e "${GREEN}All tests ran successfully${NC}"

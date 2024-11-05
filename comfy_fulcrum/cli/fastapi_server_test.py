@@ -161,7 +161,8 @@ async def amain():
 
   app = fastapi.FastAPI()
 
-  engine = create_async_engine(FULCRUM_TEST_DSN)
+  engine = create_async_engine(FULCRUM_TEST_DSN,
+                               isolation_level='REPEATABLE READ')
 
   async with DBFulcrum(engine=engine,
                        lease_timeout=60.,
