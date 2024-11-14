@@ -216,9 +216,10 @@ createdb ${PG_CLI_OPTS} -O "${PG_USER}" "${PG_DB_NAME}" || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION pg_trgm;' || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION btree_gist;' || true
 # psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION pgcrypto;' || true
-psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
 
-sudo psql "${DSN}" -c 'SELECT uuid_generate_v4();'
+
+# psql ${PG_CLI_OPTS} --dbname="${PG_DB_NAME}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' || true
+# sudo psql "${DSN}" -c 'SELECT uuid_generate_v4();'
 
 # Replace schema protocol with postgresql+asyncpg://
 ALCHEMY_DSN=$(echo "${DSN}" | sed 's|^postgresql://|postgresql+asyncpg://|')

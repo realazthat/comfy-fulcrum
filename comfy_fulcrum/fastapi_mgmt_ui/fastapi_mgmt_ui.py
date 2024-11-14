@@ -6,7 +6,6 @@
 # under the MIT license or a compatible open source license. See LICENSE.md for
 # the license text.
 
-import datetime
 import logging
 import sys
 import uuid
@@ -20,6 +19,10 @@ from fastapi.templating import Jinja2Templates
 from humanize import naturaldelta
 from pydantic import TypeAdapter
 from starlette.datastructures import UploadFile
+
+from ..private.utilities import (InterpretToUTC, NormalizeDatetime,
+                                 UTCNaiveDatetime, UTCNow,
+                                 ValidateUTCNaiveDatetime)
 
 if sys.version_info >= (3, 9):
   import importlib.resources as pkg_resources
@@ -98,24 +101,21 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
                          })
 
   async def _UIMGMTRoute(self, request: Request):
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
 
     resources: List[_base.ResourceMeta] = await self._fulcrum.ListResources()
 
     resources_dicts: List[dict] = []
     for resource in resources:
+      inserted: UTCNaiveDatetime = ValidateUTCNaiveDatetime(resource.inserted)
+      ago = naturaldelta(now - inserted)
+
       resources_dicts.append({
-          'id':
-          resource.id,
-          'started':
-          resource.inserted.replace(tzinfo=datetime.timezone.utc),
-          'started_ago':
-          naturaldelta(now -
-                       resource.inserted.replace(tzinfo=datetime.timezone.utc)),
-          'channels':
-          resource.channels,
-          'data':
-          resource.data,
+          'id': resource.id,
+          'started': InterpretToUTC(inserted),
+          'started_ago': ago,
+          'channels': resource.channels,
+          'data': resource.data,
       })
 
     return self._templates.TemplateResponse(str(TEMPLATE_MGMT_PATH), {

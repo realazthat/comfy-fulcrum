@@ -7,11 +7,11 @@
 # the license text.
 
 import asyncio
-import datetime
 import json
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from typing import (Any, Awaitable, Callable, Dict, List, Optional, Union,
                     overload)
 
@@ -22,15 +22,19 @@ from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, bindparam, cast, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
                                     async_sessionmaker)
 from sqlalchemy.schema import PrimaryKeyConstraint
 from sqlalchemy.sql.expression import distinct, select, update
-from tenacity import retry_if_exception_type, wait_exponential_jitter
+from tenacity import (retry_any, retry_if_exception_cause_type,
+                      retry_if_exception_type, retry_if_result,
+                      wait_exponential_jitter)
 from typing_extensions import Literal
 
 from ..base import base as _base
-from ..private.utilities import instance_retry
+from ..private.utilities import (NormalizeDatetime, UTCNaiveDatetime, UTCNow,
+                                 instance_retry)
 
 logger = logging.getLogger(__name__)
 
@@ -147,17 +151,31 @@ async def _IsGenUUIDAvailable(engine: AsyncEngine, uuid_gen_func: str) -> bool:
   async with session_maker() as session:
     async with session.begin():
       try:
-        result = await session.execute(text(f'SELECT {uuid_gen_func}()'))
+        result = await session.execute(text(f'SELECT {uuid_gen_func}'))
         result.fetchone()
       except Exception:
         return False
       return True
 
 
+def _IsSerializationError(exception: BaseException) -> bool:
+  if isinstance(exception, SerializationError):
+    return True
+  if isinstance(exception, DBAPIError):
+    if exception.__cause__ is not None:
+      if _IsSerializationError(exception.__cause__):
+        return True
+    if exception.orig is not None:
+      if _IsSerializationError(exception.orig):
+        return True
+
+  return False
+
+
 class DBFulcrum(_base.FulcrumBase):
 
   def __init__(self, *, engine: AsyncEngine, lease_timeout: float,
-               service_sleep_interval: float):
+               service_sleep_interval: float, retry: bool):
     self._engine = engine
     self._lease_timeout = lease_timeout
 
@@ -167,13 +185,23 @@ class DBFulcrum(_base.FulcrumBase):
     self._service_sleep_interval = service_sleep_interval
     self._service_task: Optional[asyncio.Task] = None
     self.debug = False
-    self._uuid_gen_func: Optional[Literal['gen_random_uuid',
-                                          'uuid_generate_v4']] = None
-    self.tenacity_kwargs = {
-        'retry': retry_if_exception_type((SerializationError)),
-        # 'stop': stop_after_attempt(3),
-        'wait': wait_exponential_jitter(initial=1.0),
-    }
+    self._uuid_gen_func: Optional[str] = None
+    self._initialized = False
+
+    if retry:
+      self.tenacity_kwargs = {}
+    else:
+      self.tenacity_kwargs = {
+          'retry':
+          retry_any(
+              retry_if_exception_type((SerializationError, )),
+              retry_if_exception_cause_type((SerializationError, )),
+              retry_if_result(_IsSerializationError),
+          ),
+          # 'stop': stop_after_attempt(3),
+          'wait':
+          wait_exponential_jitter(initial=1.0),
+      }
 
   def close(self):
     if self._service_task is None:
@@ -190,22 +218,25 @@ class DBFulcrum(_base.FulcrumBase):
       pass
 
   async def Initialize(self):
-    uuid_gen_funcs = ['gen_random_uuid', 'uuid_generate_v4']
-    for uuid_gen_func in uuid_gen_funcs:
+    uuid_gen_funcs = {
+        'gen_random_uuid': 'gen_random_uuid',
+        'uuid_generate_v4': 'uuid_generate_v4',
+        'md5': 'md5(random()::text || clock_timestamp()::text)'
+    }
+    for _, uuid_gen_func in uuid_gen_funcs.items():
       if await _IsGenUUIDAvailable(self._engine, uuid_gen_func):
-        validator: TypeAdapter[Literal['gen_random_uuid', 'uuid_generate_v4']]
-        validator = TypeAdapter(Literal['gen_random_uuid', 'uuid_generate_v4'])
-        self._uuid_gen_func = validator.validate_python(uuid_gen_func)
+        self._uuid_gen_func = uuid_gen_func
         break
-    else:
+    if self._uuid_gen_func is None:
       raise RuntimeError(
-          'gen_random_uuid() or uuid_generate_v4() is not available. Please enable the pgcrypto or uuid-ossp extension.'
+          'No UUID generator function available, somehow failed to fallback to md5+random+clock_timestamp'
       )
 
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.create_all)
     self._service_task = asyncio.create_task(
         self._Service(), name=f'{self.__class__.__name__}._Service')
+    self._initialized = True
 
   async def DropAll(self):
     async with self._engine.begin() as conn:
@@ -249,20 +280,16 @@ WITH free_resources AS (
   FROM channel_ticket_queue
   WHERE channel = :channel
   ORDER BY priority DESC, t ASC
-), matches_ AS (
+), potential_matches_ AS (
   SELECT
     queued_channel_ticket_items.lease_id,
     free_resources.resource_id,
     resources.data
-  FROM queued_channel_ticket_items
-    INNER JOIN free_resources USING (rn)
-    -- Join this back to include it in the lock.
-    INNER JOIN leases ON leases.id = queued_channel_ticket_items.lease_id
-    -- Join this back to include it in the lock.
-    INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = queued_channel_ticket_items.lease_id
-    -- Join this back to include it in the lock.
+  FROM leases
+  INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = leases.id
+    INNER JOIN queued_channel_ticket_items ON queued_channel_ticket_items.lease_id = leases.id
+    INNER JOIN free_resources ON free_resources.rn = queued_channel_ticket_items.rn
     INNER JOIN resources ON resources.id = free_resources.resource_id
-    -- Join this back to include it in the lock.
     INNER JOIN resource_free_queue ON resource_free_queue.resource_id = free_resources.resource_id
   WHERE 1=1
     -- Redudant checks, because only locking now.
@@ -274,27 +301,34 @@ WITH free_resources AS (
     -- Redudant checks, because only locking now.
     AND leases.tombstone IS FALSE
   ORDER BY queued_channel_ticket_items.lease_id
-  FOR UPDATE OF leases, channel_ticket_queue, resources, resource_free_queue
+), locked_matches_ AS (
+  SELECT potential_matches_.lease_id, potential_matches_.resource_id, potential_matches_.data
+  FROM potential_matches_
+    INNER JOIN leases ON leases.id = potential_matches_.lease_id
+    INNER JOIN channel_ticket_queue ON channel_ticket_queue.lease_id = potential_matches_.lease_id
+    INNER JOIN resources ON resources.id = potential_matches_.resource_id
+    INNER JOIN resource_free_queue ON resource_free_queue.resource_id = potential_matches_.resource_id
+  FOR UPDATE OF leases, channel_ticket_queue, resources, resource_free_queue SKIP LOCKED
 ), delete_ticket_from_queue AS (
   DELETE FROM channel_ticket_queue
-  WHERE lease_id IN (SELECT lease_id FROM matches_)
+  WHERE lease_id IN (SELECT lease_id FROM locked_matches_)
 ), delete_resource_from_queue AS (
   DELETE FROM resource_free_queue
-  WHERE resource_id IN (SELECT resource_id FROM matches_)
+  WHERE resource_id IN (SELECT resource_id FROM locked_matches_)
 ), update_leases AS (
   UPDATE leases
-  SET resource_id = matches_.resource_id,
+  SET resource_id = locked_matches_.resource_id,
       updated = (NOW() AT TIME ZONE 'UTC')::timestamp, 
-      data = matches_.data
-  FROM matches_
-  WHERE id = matches_.lease_id
+      data = locked_matches_.data
+  FROM locked_matches_
+  WHERE id = locked_matches_.lease_id
     AND leases.tombstone IS FALSE
 ), updated_resources AS (
   UPDATE resources
-  SET lease_id = matches_.lease_id,
+  SET lease_id = locked_matches_.lease_id,
       updated = (NOW() AT TIME ZONE 'UTC')::timestamp
-  FROM matches_
-  WHERE id = matches_.resource_id
+  FROM locked_matches_
+  WHERE id = locked_matches_.resource_id
     AND resources.tombstone IS FALSE
 )
 SELECT 1
@@ -304,21 +338,21 @@ SELECT 1
 
   @instance_retry()
   async def _ServiceTimedoutLeases(self, session: AsyncSession,
-                                   now: datetime.datetime):
+                                   now: UTCNaiveDatetime):
     # Update all leases that have timed out.
     # 1. Find all expired leases.
     # 2. Mark the expired leases as tombstoned.
     # 2. Remove the expired leases from the channel_ticket_queue.
     # 3. Add the newly free resources to the resource_free_queue.
 
-    sql = """
+    sql = f"""
 WITH expired_leases AS (
   SELECT leases.id AS lease_id, leases.resource_id
   FROM leases
   WHERE 1=1
     AND ends < :now
     AND tombstone IS FALSE
-  FOR UPDATE OF leases
+  FOR UPDATE OF leases SKIP LOCKED
 ), expired_channel_ticket_items AS (
   SELECT
     channel_ticket_queue.channel,
@@ -333,7 +367,7 @@ WITH expired_leases AS (
   FROM channel_ticket_queue
     LEFT OUTER JOIN leases ON leases.id = channel_ticket_queue.lease_id
   WHERE (leases.id IS NULL OR leases.tombstone IS TRUE)
-  FOR UPDATE OF channel_ticket_queue
+  FOR UPDATE OF channel_ticket_queue SKIP LOCKED
 ), expired_resources AS (
   SELECT resources.id as resource_id, resources.channels
   FROM resources
@@ -358,7 +392,7 @@ WITH expired_leases AS (
   FROM resource_free_queue
     LEFT OUTER JOIN resources ON resources.id = resource_free_queue.resource_id
   WHERE (resources.id IS NULL OR resources.tombstone IS TRUE)
-  FOR UPDATE OF resource_free_queue
+  FOR UPDATE OF resource_free_queue SKIP LOCKED
 ), newly_free_resource_items AS (
   SELECT channel.value AS channel, expired_resources.resource_id
   FROM expired_resources
@@ -390,11 +424,11 @@ WITH expired_leases AS (
   RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
-  SELECT md5(random()::text || clock_timestamp()::text) AS report_id,
+  SELECT {self._uuid_gen_func} AS report_id,
          expired_leases.resource_id as resource_id,
          expired_leases.lease_id AS lease_id,
          'timeout' AS report,
-         '{}'::jsonb AS extra
+         '{{}}'::jsonb AS extra
   FROM expired_leases
   WHERE expired_leases.resource_id IS NOT NULL
   RETURNING *
@@ -413,7 +447,7 @@ SELECT 1
     await session.execute(stmt, {'now': now})
 
   async def _ServiceOnce(self):
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=None):
         await self._ServiceTimedoutLeases(session, now)
@@ -440,7 +474,11 @@ SELECT 1
     logger.debug(
         f'Get: client_name={client_name}, channels={channels}, priority={priority}'
     )
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
+
+    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
+    ends: UTCNaiveDatetime = now + timedelta(seconds=self._lease_timeout)
 
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
@@ -449,8 +487,7 @@ SELECT 1
         ticket = _base.Ticket(id=_base.LeaseID(uuid.uuid4().hex),
                               client_name=client_name,
                               lease_timeout=self._lease_timeout,
-                              ends=now +
-                              datetime.timedelta(seconds=self._lease_timeout))
+                              ends=NormalizeDatetime(ends))
         sql = """
         WITH inserted_lease AS (
           INSERT INTO leases(id, client_name, channels, priority, resource_id, data, lease_timeout, ends)
@@ -477,7 +514,7 @@ SELECT 1
                                            channels)),  # Pass as list/array
                 'priority': priority,
                 'lease_timeout': self._lease_timeout,
-                'ends': now + datetime.timedelta(seconds=self._lease_timeout),
+                'ends': now + timedelta(seconds=self._lease_timeout),
                 'now': now,
             })
         return ticket
@@ -497,8 +534,10 @@ SELECT 1
   async def _Touch(
       self, *, id: _base.LeaseID, type: Literal['lease', 'ticket_or_lease']
   ) -> Union[_base.Ticket, _base.Lease, None]:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
 
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         where_clauses = [LEASES.c.id == id, LEASES.c.tombstone.is_(False)]
@@ -506,7 +545,7 @@ SELECT 1
         stmt = update(LEASES).where(*where_clauses).values(
             updated=now,
             lease_timeout=self._lease_timeout,
-            ends=now + datetime.timedelta(seconds=self._lease_timeout),
+            ends=now + timedelta(seconds=self._lease_timeout),
         ).returning(*LEASES.c)
 
         result: AsyncResult = await session.stream(stmt)
@@ -519,7 +558,7 @@ SELECT 1
         client_name: _base.ClientName = row.client_name
         resource_id: Optional[_base.ResourceID] = row.resource_id
         data: Optional[str] = row.data
-        ends: datetime.datetime = row.ends
+        ends: UTCNaiveDatetime = NormalizeDatetime(row.ends)
         tombstone: bool = row.tombstone
         lease_timeout: float = row.lease_timeout
 
@@ -540,13 +579,13 @@ SELECT 1
                              resource_id=resource_id,
                              data=data,
                              lease_timeout=lease_timeout,
-                             ends=ends)
+                             ends=NormalizeDatetime(ends))
         elif type == 'ticket_or_lease':
           if resource_id is None:
             return _base.Ticket(id=lease_id,
                                 client_name=client_name,
                                 lease_timeout=lease_timeout,
-                                ends=ends)
+                                ends=NormalizeDatetime(ends))
           if data is None:
             raise AssertionError(
                 'Expected data to be set on a lease with a resource id set')
@@ -555,7 +594,7 @@ SELECT 1
                              resource_id=resource_id,
                              data=data,
                              lease_timeout=lease_timeout,
-                             ends=ends)
+                             ends=NormalizeDatetime(ends))
         else:
           raise ValueError(f'Unexpected type: {type}')
 
@@ -565,11 +604,15 @@ SELECT 1
   async def TouchTicket(
       self, *, id: _base.LeaseID) -> Union[_base.Lease, _base.Ticket, None]:
     logger.debug(f'TouchTicket: with id={id}')
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     return await self._Touch(id=id, type='ticket_or_lease')
 
   @instance_retry()
   async def TouchLease(self, *, id: _base.LeaseID) -> Optional[_base.Lease]:
     logger.debug(f'TouchLease: with id={id}')
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     return await self._Touch(id=id, type='lease')
 
   @instance_retry()
@@ -579,6 +622,8 @@ SELECT 1
     logger.debug(
         f'Release: lease with id={id}, report={report}, report_extra={report_extra}'
     )
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         sql = f"""
@@ -628,7 +673,7 @@ WITH selected_leases AS (
   RETURNING *
 ), inserted_reports AS (
   INSERT INTO reports(id, resource_id, lease_id, report, extra)
-  SELECT {self._uuid_gen_func}() AS report_id,
+  SELECT {self._uuid_gen_func} AS report_id,
           updated_leases.resource_id as resource_id,
           updated_leases.lease_id AS lease_id,
           :report AS report,
@@ -663,6 +708,8 @@ SELECT (SELECT COUNT(*) FROM updated_leases) as released_leases_count,
     logger.debug(
         f'RegisterResource: resource_id={resource_id}, channels={channels}, data={data}'
     )
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
 
     channels = list(set(channels))
     async with await self._GetSession() as session:
@@ -695,6 +742,8 @@ SELECT 1
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     logger.debug(f'RemoveResource: resource_id={resource_id}')
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         sql = """
@@ -774,6 +823,8 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
 
   @instance_retry()
   async def _ActiveLeasesCount(self, *, session: AsyncSession) -> int:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     stmt = select(func.count(distinct(LEASES.c.id)).label('count')).where(
         LEASES.c.tombstone.is_(False), LEASES.c.resource_id.isnot(None))
 
@@ -785,6 +836,8 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
 
   @instance_retry()
   async def _ResourceCount(self, *, session: AsyncSession) -> int:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     stmt = select(func.count(distinct(RESOURCES.c.id)).label('count')).where(
         RESOURCES.c.tombstone.is_(False))
 
@@ -820,6 +873,8 @@ GROUP BY channel
 
   @instance_retry()
   async def _QueueSize(self, *, session: AsyncSession) -> int:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     stmt = select(
         func.count(distinct(CHANNEL_TICKET_QUEUE.c.lease_id)).label('count'))
 
@@ -832,6 +887,8 @@ GROUP BY channel
   @instance_retry()
   async def _ChannelQueueSize(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     channel_id_ta = TypeAdapter(_base.ChannelID)
 
     stmt = select(
@@ -851,6 +908,8 @@ GROUP BY channel
 
   @instance_retry()
   async def ListResources(self) -> List[_base.ResourceMeta]:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
@@ -864,7 +923,7 @@ GROUP BY channel
           resource_id: _base.ResourceID = row.id
           channels: List[_base.ChannelID] = row.channels
           data: str = row.data
-          inserted: datetime.datetime = row.inserted
+          inserted: UTCNaiveDatetime = NormalizeDatetime(row.inserted)
           resources.append(
               _base.ResourceMeta(id=resource_id,
                                  channels=channels,
@@ -874,6 +933,8 @@ GROUP BY channel
 
   @instance_retry()
   async def Stats(self) -> _base.Stats:
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
       async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
         active_leases_task = self._ActiveLeasesCount(session=session)
@@ -898,6 +959,9 @@ GROUP BY channel
   async def _CheckLeaseSanity(self, *, leases: List[RowMapping],
                               resources: List[RowMapping],
                               channel_ticket_queue: List[RowMapping]):
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
+
     resource_id_2_idx = {
         resource['id']: idx
         for idx, resource in enumerate(resources)
@@ -958,6 +1022,8 @@ GROUP BY channel
   async def _CheckResourceSanity(self, *, leases: List[RowMapping],
                                  resources: List[RowMapping],
                                  resource_free_queue: List[RowMapping]):
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     lease_id_2_idx = {lease['id']: idx for idx, lease in enumerate(leases)}
     res_id_2_idx = {
         resource['id']: idx
@@ -1017,6 +1083,8 @@ GROUP BY channel
 
   @instance_retry()
   async def _CheckSanity(self, session: AsyncSession):
+    if not self._initialized:
+      raise RuntimeError('DBFulcrum not initialized')
     leases: List[RowMapping] = list(
         (await
          session.execute(select(LEASES).where(LEASES.c.tombstone.is_(False))

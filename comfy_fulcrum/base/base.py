@@ -5,12 +5,11 @@
 # under the MIT license or a compatible open source license. See LICENSE.md for
 # the license text.
 
-import datetime
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, NewType, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, NaiveDatetime
 from typing_extensions import Literal
 
 ClientName = NewType('ClientName', str)
@@ -30,7 +29,8 @@ class Ticket(BaseModel):
   id: LeaseID
   client_name: ClientName
   lease_timeout: float
-  ends: datetime.datetime
+  ends: NaiveDatetime = Field(...,
+                              description='UTC datetime when the ticket ends')
 
 
 class Lease(BaseModel):
@@ -42,11 +42,13 @@ class Lease(BaseModel):
   resource_id: ResourceID
   data: str
   lease_timeout: float
-  ends: datetime.datetime
+  ends: NaiveDatetime = Field(...,
+                              description='UTC datetime when the lease ends')
 
 
 class ResourceMeta(BaseModel):
-  inserted: datetime.datetime
+  inserted: NaiveDatetime = Field(
+      ..., description='UTC datetime when the resource was inserted')
   id: ResourceID
   channels: List[ChannelID]
   data: str

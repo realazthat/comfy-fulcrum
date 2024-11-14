@@ -213,17 +213,17 @@ Server via Python:
 
   app = fastapi.FastAPI()
 
-  db_engine: AsyncEngine = create_async_engine(
-      dsn,
-      echo=False,
-      pool_size=10,
-      max_overflow=20,
-      pool_timeout=5,
-      pool_recycle=1800,
-      isolation_level='REPEATABLE READ')
+  db_engine: AsyncEngine = create_async_engine(dsn,
+                                               echo=False,
+                                               pool_size=10,
+                                               max_overflow=20,
+                                               pool_timeout=5,
+                                               pool_recycle=1800,
+                                               isolation_level='READ COMMITTED')
   fulcrum = DBFulcrum(engine=db_engine,
                       lease_timeout=60. * 5,
-                      service_sleep_interval=1.0)
+                      service_sleep_interval=1.0,
+                      retry=True)
   await fulcrum.Initialize()
   routes = FulcrumServerRoutes(fulcrum=fulcrum)
   app.include_router(routes.Router())

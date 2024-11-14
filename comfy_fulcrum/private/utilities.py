@@ -6,12 +6,16 @@
 # the license text.
 
 import asyncio
+import datetime
 import functools
 import sys
 from functools import wraps
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, NewType, Optional, TypeVar, Union, cast
 
 import tenacity
+
+UTCNaiveDatetime = NewType('UTCNaiveDatetime', datetime.datetime)
+UTCAwareDatetime = NewType('UTCAwareDatetime', datetime.datetime)
 
 if sys.version_info >= (3, 9):
   to_thread = asyncio.to_thread
@@ -82,3 +86,46 @@ def instance_retry(**retry_kwargs: Any) -> Callable[[_F], _F]:
       return cast(_F, sync_wrapper)
 
   return inner
+
+
+def ValidateUTCNaiveDatetime(d: datetime.datetime) -> UTCNaiveDatetime:
+  if d.tzinfo is not None:
+    raise ValueError(f'Expected a UTC naive datetime, got {d}')
+  return UTCNaiveDatetime(d)
+
+
+def UTCNow() -> UTCAwareDatetime:
+  return UTCAwareDatetime(datetime.datetime.now(datetime.timezone.utc))
+
+
+def NormalizeDatetime(
+    d: Union[UTCNaiveDatetime, UTCAwareDatetime, datetime.datetime]
+) -> UTCNaiveDatetime:
+  if d.tzinfo is None:
+    return UTCNaiveDatetime(d)
+  return UTCNaiveDatetime(
+      d.astimezone(datetime.timezone.utc).replace(tzinfo=None))
+
+
+def NormalizeDatetimeOr(
+    d: Union[UTCNaiveDatetime, UTCAwareDatetime, datetime.datetime, None]
+) -> Optional[UTCNaiveDatetime]:
+  if d is None:
+    return None
+  return NormalizeDatetime(d)
+
+
+def InterpretToUTC(
+    d: Union[UTCNaiveDatetime, UTCAwareDatetime, datetime.datetime]
+) -> UTCAwareDatetime:
+  if d.tzinfo is None:
+    return UTCAwareDatetime(d.replace(tzinfo=datetime.timezone.utc))
+  return UTCAwareDatetime(d.astimezone(datetime.timezone.utc))
+
+
+def InterpretToUTCOr(
+    d: Union[UTCNaiveDatetime, UTCAwareDatetime, datetime.datetime, None]
+) -> Optional[UTCAwareDatetime]:
+  if d is None:
+    return None
+  return InterpretToUTC(d)

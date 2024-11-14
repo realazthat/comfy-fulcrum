@@ -162,11 +162,12 @@ async def amain():
   app = fastapi.FastAPI()
 
   engine = create_async_engine(FULCRUM_TEST_DSN,
-                               isolation_level='REPEATABLE READ')
+                               isolation_level='READ COMMITTED')
 
   async with DBFulcrum(engine=engine,
                        lease_timeout=60.,
-                       service_sleep_interval=0.1) as db_fulcrum:
+                       service_sleep_interval=0.1,
+                       retry=False) as db_fulcrum:
     async with engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
     await db_fulcrum.DropAll()

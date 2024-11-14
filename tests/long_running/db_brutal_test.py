@@ -79,10 +79,11 @@ async def amain():
                                                max_overflow=20,
                                                pool_timeout=5,
                                                pool_recycle=1800,
-                                               isolation_level='REPEATABLE READ')
+                                               isolation_level='READ COMMITTED')
   fulcrum = DBFulcrum(engine=db_engine,
                       lease_timeout=60. * 5,
-                      service_sleep_interval=1.0)
+                      service_sleep_interval=1.0,
+                      retry=False)
   await fulcrum.DropAll()
   await fulcrum.Initialize()
 
