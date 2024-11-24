@@ -11,6 +11,7 @@ import json
 import os
 import random
 import sys
+from typing_extensions import Literal, assert_never
 import uuid
 from typing import List, Optional, Union
 
@@ -19,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from comfy_fulcrum.base.base import (ChannelID, ClientName, FulcrumBase, Lease, ResourceID,
                          Ticket)
 from comfy_fulcrum.db.db import DBFulcrum
+from comfy_fulcrum.db.resource_sot import DBResourceSOT
+from comfy_fulcrum.memory.memory import InMemoryFulcrum
 
 
 async def ResourceOwnerThread(fulcrum: FulcrumBase, channels: List[ChannelID]):
@@ -67,45 +70,66 @@ async def StatsThread(fulcrum: FulcrumBase):
     print(json.dumps(stats.model_dump(), indent=2))
     await asyncio.sleep(5)
 
+
+async def MakeFulcrum(*, type: Literal['db', 'memory'], dsn: str) -> FulcrumBase:
+  db_engine: AsyncEngine = create_async_engine(dsn,
+                                                echo=False,
+                                                pool_size=10,
+                                                max_overflow=20,
+                                                pool_timeout=5,
+                                                pool_recycle=1800,
+                                                isolation_level='READ COMMITTED')
+  if type == 'db':
+
+    fulcrum = DBFulcrum(engine=db_engine,
+                        lease_timeout=60. * 5,
+                        service_sleep_interval=1.0,
+                        retry=False)
+    await fulcrum.DropAll()
+    await fulcrum.Initialize()
+    return fulcrum
+  elif type == 'memory':
+    resource_mgr = DBResourceSOT(db_engine=db_engine, retry=False)
+    await resource_mgr.DropAll()
+    await resource_mgr.Initalize()
+
+    fulcrum = InMemoryFulcrum(resource_mgr=resource_mgr, lease_timeout=60. * 5, service_sleep_interval=1.0)
+    await fulcrum.Initialize()
+    return fulcrum
+  else:
+    assert_never(type)
+
 async def amain():
   dsn: Optional[str] = os.environ.get('FULCRUM_TEST_DSN')
   if dsn is None:
     print('Please set the FULCRUM_TEST_DSN environment variable', file=sys.stderr)
     exit(1)
 
-  db_engine: AsyncEngine = create_async_engine(dsn,
-                                               echo=False,
-                                               pool_size=10,
-                                               max_overflow=20,
-                                               pool_timeout=5,
-                                               pool_recycle=1800,
-                                               isolation_level='READ COMMITTED')
-  fulcrum = DBFulcrum(engine=db_engine,
-                      lease_timeout=60. * 5,
-                      service_sleep_interval=1.0,
-                      retry=False)
-  await fulcrum.DropAll()
-  await fulcrum.Initialize()
+  fulcrum_type: Literal['db', 'memory']
+  fulcrum_types: List[Literal['db', 'memory']] = ['db', 'memory']
 
-  channels = [ChannelID(f'channel_{i}') for i in range(20)]
-  resources = 20
-  consumers = 200
+  for fulcrum_type in fulcrum_types:
+    fulcrum = await MakeFulcrum(type=fulcrum_type, dsn=dsn)
+    
+    channels = [ChannelID(f'channel_{i}') for i in range(20)]
+    resources = 20
+    consumers = 200
 
-  consumer_tasks = [
-      asyncio.create_task(ConsumerThread(fulcrum=fulcrum, channels=channels))
-      for _ in range(consumers)
-  ]
-  resource_owner_tasks = [
-      asyncio.create_task(ResourceOwnerThread(fulcrum=fulcrum, channels=channels))
-      for _ in range(resources)
-  ]
+    consumer_tasks = [
+        asyncio.create_task(ConsumerThread(fulcrum=fulcrum, channels=channels))
+        for _ in range(consumers)
+    ]
+    resource_owner_tasks = [
+        asyncio.create_task(ResourceOwnerThread(fulcrum=fulcrum, channels=channels))
+        for _ in range(resources)
+    ]
 
-  stats_task = asyncio.create_task(StatsThread(fulcrum=fulcrum))
+    stats_task = asyncio.create_task(StatsThread(fulcrum=fulcrum))
 
-  try:
-    await asyncio.wait_for(asyncio.gather(stats_task, *consumer_tasks, *resource_owner_tasks),  timeout=5 * 60)
-  except asyncio.TimeoutError:
-    pass
+    try:
+      await asyncio.wait_for(asyncio.gather(stats_task, *consumer_tasks, *resource_owner_tasks),  timeout=5 * 60)
+    except asyncio.TimeoutError:
+      pass
 
 if __name__ == '__main__':
   asyncio.run(amain())

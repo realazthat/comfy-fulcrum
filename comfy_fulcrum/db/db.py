@@ -10,10 +10,8 @@ import asyncio
 import json
 import logging
 import uuid
-from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import (Any, Awaitable, Callable, Dict, List, Optional, Union,
-                    overload)
+from typing import Any, Dict, List, Optional, Union, overload
 
 import sqlalchemy
 from asyncpg import SerializationError
@@ -22,7 +20,6 @@ from sqlalchemy import (TIMESTAMP, Boolean, Column, Float, Index, MetaData,
                         Result, String, Table, bindparam, cast, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.row import RowMapping
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncResult, AsyncSession,
                                     async_sessionmaker)
 from sqlalchemy.schema import PrimaryKeyConstraint
@@ -30,28 +27,13 @@ from sqlalchemy.sql.expression import distinct, select, update
 from tenacity import (retry_any, retry_if_exception_cause_type,
                       retry_if_exception_type, retry_if_result,
                       wait_exponential_jitter)
-from typing_extensions import Literal
+from typing_extensions import Literal, override
 
 from ..base import base as _base
-from ..private.utilities import (NormalizeDatetime, UTCNaiveDatetime, UTCNow,
-                                 instance_retry)
+from ..private import utilities as priv_utils
+from .private import utilities as db_priv_utils
 
 logger = logging.getLogger(__name__)
-
-
-@asynccontextmanager
-async def _AutoCommit(session: AsyncSession, *,
-                      sanity: Optional[Callable[[AsyncSession],
-                                                Awaitable[None]]]):
-
-  async with session.begin():
-
-    if sanity is not None:
-      await sanity(session)
-    yield session
-    if sanity is not None:
-      await sanity(session)
-
 
 METADATA = MetaData()
 RESOURCES = Table(
@@ -158,20 +140,6 @@ async def _IsGenUUIDAvailable(engine: AsyncEngine, uuid_gen_func: str) -> bool:
       return True
 
 
-def _IsSerializationError(exception: BaseException) -> bool:
-  if isinstance(exception, SerializationError):
-    return True
-  if isinstance(exception, DBAPIError):
-    if exception.__cause__ is not None:
-      if _IsSerializationError(exception.__cause__):
-        return True
-    if exception.orig is not None:
-      if _IsSerializationError(exception.orig):
-        return True
-
-  return False
-
-
 class DBFulcrum(_base.FulcrumBase):
 
   def __init__(self, *, engine: AsyncEngine, lease_timeout: float,
@@ -196,7 +164,7 @@ class DBFulcrum(_base.FulcrumBase):
           retry_any(
               retry_if_exception_type((SerializationError, )),
               retry_if_exception_cause_type((SerializationError, )),
-              retry_if_result(_IsSerializationError),
+              retry_if_result(db_priv_utils.IsSerializationError),
           ),
           # 'stop': stop_after_attempt(3),
           'wait':
@@ -256,7 +224,7 @@ class DBFulcrum(_base.FulcrumBase):
       channels.append(channel_id_ta.validate_python(row.channel))
     return channels
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ServiceChannelOnce(self, session: AsyncSession,
                                 channel: _base.ChannelID):
 
@@ -336,9 +304,9 @@ SELECT 1
     stmt = sqlalchemy.text(sql)
     await session.execute(stmt, {'channel': channel})
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ServiceTimedoutLeases(self, session: AsyncSession,
-                                   now: UTCNaiveDatetime):
+                                   now: priv_utils.UTCNaiveDatetime):
     # Update all leases that have timed out.
     # 1. Find all expired leases.
     # 2. Mark the expired leases as tombstoned.
@@ -447,12 +415,13 @@ SELECT 1
     await session.execute(stmt, {'now': now})
 
   async def _ServiceOnce(self):
-    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
+    now: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
+        priv_utils.UTCNow())
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=None):
+      async with db_priv_utils.AutoCommit(session, sanity=None):
         await self._ServiceTimedoutLeases(session, now)
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=None):
+      async with db_priv_utils.AutoCommit(session, sanity=None):
         channels: List[_base.ChannelID] = await self._GetChannels(session)
         for channel in channels:
           await self._ServiceChannelOnce(session, channel)
@@ -467,7 +436,8 @@ SELECT 1
       except Exception:
         logger.exception('Error in DBFulcrum._Service, retrying')
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def Get(self, *, client_name: _base.ClientName,
                 channels: List[_base.ChannelID],
                 priority: int) -> Union[_base.Lease, _base.Ticket]:
@@ -477,17 +447,20 @@ SELECT 1
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
 
-    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
-    ends: UTCNaiveDatetime = now + timedelta(seconds=self._lease_timeout)
+    now: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
+        priv_utils.UTCNow())
+    ends: priv_utils.UTCNaiveDatetime = now + timedelta(
+        seconds=self._lease_timeout)
 
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         channels = list(set(channels))
 
         ticket = _base.Ticket(id=_base.LeaseID(uuid.uuid4().hex),
                               client_name=client_name,
                               lease_timeout=self._lease_timeout,
-                              ends=NormalizeDatetime(ends))
+                              ends=priv_utils.NormalizeDatetime(ends))
         sql = """
         WITH inserted_lease AS (
           INSERT INTO leases(id, client_name, channels, priority, resource_id, data, lease_timeout, ends)
@@ -537,9 +510,11 @@ SELECT 1
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
 
-    now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
+    now: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
+        priv_utils.UTCNow())
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         where_clauses = [LEASES.c.id == id, LEASES.c.tombstone.is_(False)]
 
         stmt = update(LEASES).where(*where_clauses).values(
@@ -558,7 +533,8 @@ SELECT 1
         client_name: _base.ClientName = row.client_name
         resource_id: Optional[_base.ResourceID] = row.resource_id
         data: Optional[str] = row.data
-        ends: UTCNaiveDatetime = NormalizeDatetime(row.ends)
+        ends: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
+            row.ends)
         tombstone: bool = row.tombstone
         lease_timeout: float = row.lease_timeout
 
@@ -579,13 +555,13 @@ SELECT 1
                              resource_id=resource_id,
                              data=data,
                              lease_timeout=lease_timeout,
-                             ends=NormalizeDatetime(ends))
+                             ends=priv_utils.NormalizeDatetime(ends))
         elif type == 'ticket_or_lease':
           if resource_id is None:
             return _base.Ticket(id=lease_id,
                                 client_name=client_name,
                                 lease_timeout=lease_timeout,
-                                ends=NormalizeDatetime(ends))
+                                ends=priv_utils.NormalizeDatetime(ends))
           if data is None:
             raise AssertionError(
                 'Expected data to be set on a lease with a resource id set')
@@ -594,13 +570,14 @@ SELECT 1
                              resource_id=resource_id,
                              data=data,
                              lease_timeout=lease_timeout,
-                             ends=NormalizeDatetime(ends))
+                             ends=priv_utils.NormalizeDatetime(ends))
         else:
           raise ValueError(f'Unexpected type: {type}')
 
       # TODO: If the resource can be immediately allocated, return a Lease.
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def TouchTicket(
       self, *, id: _base.LeaseID) -> Union[_base.Lease, _base.Ticket, None]:
     logger.debug(f'TouchTicket: with id={id}')
@@ -608,14 +585,16 @@ SELECT 1
       raise RuntimeError('DBFulcrum not initialized')
     return await self._Touch(id=id, type='ticket_or_lease')
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def TouchLease(self, *, id: _base.LeaseID) -> Optional[_base.Lease]:
     logger.debug(f'TouchLease: with id={id}')
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     return await self._Touch(id=id, type='lease')
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
                     report_extra: Optional[Any]):
@@ -625,7 +604,8 @@ SELECT 1
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         sql = f"""
 WITH selected_leases AS (
   SELECT leases.id as lease_id
@@ -702,7 +682,8 @@ SELECT (SELECT COUNT(*) FROM updated_leases) as released_leases_count,
                                  json.dumps(None)),
             })
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
                              channels: List[_base.ChannelID], data: str):
     logger.debug(
@@ -713,7 +694,8 @@ SELECT (SELECT COUNT(*) FROM updated_leases) as released_leases_count,
 
     channels = list(set(channels))
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         sql = """
 WITH inserted_resource AS (
   INSERT INTO resources(id, channels, data)
@@ -738,14 +720,16 @@ SELECT 1
             'data': data,
         })
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     logger.debug(f'RemoveResource: resource_id={resource_id}')
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         sql = """
 -- Lock leases first, to be consistent in lock order, and to avoid deadlocks.
 WITH stale_leases AS (
@@ -821,7 +805,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
             deleted_channel_ticket_items_count,
         )
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ActiveLeasesCount(self, *, session: AsyncSession) -> int:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
@@ -834,7 +818,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
       raise ValueError(f'Expected int, got {type(leases)}: {leases}')
     return leases
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ResourceCount(self, *, session: AsyncSession) -> int:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
@@ -847,7 +831,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
       raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
     return queue_size
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ChannelResourceCounts(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
     channel_id_ta = TypeAdapter(_base.ChannelID)
@@ -871,7 +855,7 @@ GROUP BY channel
       channel_resource_counts[channel] = count
     return channel_resource_counts
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _QueueSize(self, *, session: AsyncSession) -> int:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
@@ -884,7 +868,7 @@ GROUP BY channel
       raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
     return queue_size
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _ChannelQueueSize(
       self, *, session: AsyncSession) -> Dict[_base.ChannelID, int]:
     if not self._initialized:
@@ -906,12 +890,14 @@ GROUP BY channel
       channel_queue_sizes[channel] = count
     return channel_queue_sizes
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def ListResources(self) -> List[_base.ResourceMeta]:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
                       RESOURCES.c.inserted).where(
                           RESOURCES.c.tombstone.is_(False))
@@ -923,7 +909,8 @@ GROUP BY channel
           resource_id: _base.ResourceID = row.id
           channels: List[_base.ChannelID] = row.channels
           data: str = row.data
-          inserted: UTCNaiveDatetime = NormalizeDatetime(row.inserted)
+          inserted: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
+              row.inserted)
           resources.append(
               _base.ResourceMeta(id=resource_id,
                                  channels=channels,
@@ -931,12 +918,14 @@ GROUP BY channel
                                  inserted=inserted))
         return resources
 
-  @instance_retry()
+  @override
+  @priv_utils.instance_retry()
   async def Stats(self) -> _base.Stats:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     async with await self._GetSession() as session:
-      async with _AutoCommit(session, sanity=self._CheckSanityIfDebug):
+      async with db_priv_utils.AutoCommit(session,
+                                          sanity=self._CheckSanityIfDebug):
         active_leases_task = self._ActiveLeasesCount(session=session)
         queue_size_task = self._QueueSize(session=session)
         channel_queue_sizes_task = self._ChannelQueueSize(session=session)
@@ -1081,7 +1070,7 @@ GROUP BY channel
             f'Free resource {key} has a resource_id {free_resource_res_id} that points at a resource that has a lease_id set'
         )
 
-  @instance_retry()
+  @priv_utils.instance_retry()
   async def _CheckSanity(self, session: AsyncSession):
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')

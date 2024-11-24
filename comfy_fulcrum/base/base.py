@@ -69,6 +69,27 @@ class Stats(BaseModel):
   channel_resources_counts: Dict[ChannelID, int]
 
 
+class ResourceSOTBase(ABC):
+
+  class RemovedResourceInfo(BaseModel):
+    removed_resources_count: int
+
+  @abstractmethod
+  async def ListResources(self) -> List[ResourceMeta]:
+    raise NotImplementedError()
+
+  @abstractmethod
+  async def RegisterResource(self, *, resource_id: ResourceID,
+                             channels: List[ChannelID], data: str):
+    raise NotImplementedError()
+
+  @abstractmethod
+  async def RemoveResource(
+      self, *,
+      resource_id: ResourceID) -> 'ResourceSOTBase.RemovedResourceInfo':
+    raise NotImplementedError()
+
+
 class FulcrumBase(ABC):
 
   @abstractmethod
