@@ -6,7 +6,7 @@
 # the license text.
 
 from contextlib import asynccontextmanager
-from typing import Awaitable, Callable, Optional
+from typing import AsyncIterator, Awaitable, Callable, Optional
 
 from asyncpg import SerializationError
 from sqlalchemy.exc import DBAPIError
@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @asynccontextmanager
-async def AutoCommit(session: AsyncSession, *,
-                     sanity: Optional[Callable[[AsyncSession],
-                                               Awaitable[None]]]):
+async def AutoCommit(
+    session: AsyncSession, *, sanity: Optional[Callable[[AsyncSession],
+                                                        Awaitable[None]]]
+) -> AsyncIterator[AsyncSession]:
 
   async with session.begin():
 

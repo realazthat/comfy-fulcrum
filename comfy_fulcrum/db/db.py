@@ -99,10 +99,10 @@ LEASES = Table(
            server_default=cast(func.timezone('UTC', func.now()), TIMESTAMP)),
     Column('client_name', String, nullable=False),
     Column('channels', JSONB, nullable=False),
-    Column('priority', Float, nullable=False),
+    Column('priority', Float[float], nullable=False),
     Column('resource_id', String, nullable=True),
     Column('data', String, nullable=True),
-    Column('lease_timeout', Float, nullable=False),
+    Column('lease_timeout', Float[float], nullable=False),
     Column('ends', TIMESTAMP(timezone=False), nullable=False),
     Column('tombstone', Boolean, nullable=False, server_default='FALSE'),
     Index('leases_tombstone_idx', 'tombstone', 'ends'),
@@ -118,7 +118,7 @@ CHANNEL_TICKET_QUEUE = Table(
     METADATA,
     Column('channel', String, nullable=False),
     Column('lease_id', String, nullable=False),
-    Column('priority', Float, nullable=False),
+    Column('priority', Float[float], nullable=False),
     Column('t', TIMESTAMP(timezone=False), nullable=False),
     PrimaryKeyConstraint('channel', 'lease_id'),
     Index('channel_ticket_queue_lease_id_t_idx', 'channel', 'lease_id'),
@@ -151,7 +151,7 @@ class DBFulcrum(_base.FulcrumBase):
                                                    expire_on_commit=False,
                                                    class_=AsyncSession)
     self._service_sleep_interval = service_sleep_interval
-    self._service_task: Optional[asyncio.Task] = None
+    self._service_task: Optional[asyncio.Task[None]] = None
     self.debug = False
     self._uuid_gen_func: Optional[str] = None
     self._initialized = False
@@ -171,12 +171,14 @@ class DBFulcrum(_base.FulcrumBase):
           wait_exponential_jitter(initial=1.0),
       }
 
-  def close(self):
+  @override
+  def close(self) -> None:
     if self._service_task is None:
       return
     self._service_task.cancel()
 
-  async def aclose(self):
+  @override
+  async def aclose(self) -> None:
     if self._service_task is None:
       return
     self._service_task.cancel()
@@ -185,7 +187,15 @@ class DBFulcrum(_base.FulcrumBase):
     except asyncio.CancelledError:
       pass
 
-  async def Initialize(self):
+  @override
+  def __enter__(self) -> 'DBFulcrum':
+    return self
+
+  @override
+  async def __aenter__(self) -> 'DBFulcrum':
+    return self
+
+  async def Initialize(self) -> None:
     uuid_gen_funcs = {
         'gen_random_uuid': 'gen_random_uuid',
         'uuid_generate_v4': 'uuid_generate_v4',
@@ -206,7 +216,7 @@ class DBFulcrum(_base.FulcrumBase):
         self._Service(), name=f'{self.__class__.__name__}._Service')
     self._initialized = True
 
-  async def DropAll(self):
+  async def DropAll(self) -> None:
     async with self._engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
 
@@ -217,7 +227,7 @@ class DBFulcrum(_base.FulcrumBase):
     channel_id_ta = TypeAdapter(_base.ChannelID)
 
     stmt = select(CHANNEL_TICKET_QUEUE.c.channel).distinct()
-    result: AsyncResult = await session.stream(stmt)
+    result: AsyncResult[Any] = await session.stream(stmt)
     row: RowMapping
     channels: List[_base.ChannelID] = []
     async for row in result.mappings():
@@ -226,7 +236,7 @@ class DBFulcrum(_base.FulcrumBase):
 
   @priv_utils.instance_retry()
   async def _ServiceChannelOnce(self, session: AsyncSession,
-                                channel: _base.ChannelID):
+                                channel: _base.ChannelID) -> None:
 
     # Allocate some free resources to open tickets.
     #
@@ -306,7 +316,7 @@ SELECT 1
 
   @priv_utils.instance_retry()
   async def _ServiceTimedoutLeases(self, session: AsyncSession,
-                                   now: priv_utils.UTCNaiveDatetime):
+                                   now: priv_utils.UTCNaiveDatetime) -> None:
     # Update all leases that have timed out.
     # 1. Find all expired leases.
     # 2. Mark the expired leases as tombstoned.
@@ -414,7 +424,7 @@ SELECT 1
     stmt = sqlalchemy.text(sql)
     await session.execute(stmt, {'now': now})
 
-  async def _ServiceOnce(self):
+  async def _ServiceOnce(self) -> None:
     now: priv_utils.UTCNaiveDatetime = priv_utils.NormalizeDatetime(
         priv_utils.UTCNow())
     async with await self._GetSession() as session:
@@ -426,7 +436,7 @@ SELECT 1
         for channel in channels:
           await self._ServiceChannelOnce(session, channel)
 
-  async def _Service(self):
+  async def _Service(self) -> None:
     while True:
       try:
         await self._ServiceOnce()
@@ -523,7 +533,7 @@ SELECT 1
             ends=now + timedelta(seconds=self._lease_timeout),
         ).returning(*LEASES.c)
 
-        result: AsyncResult = await session.stream(stmt)
+        result: AsyncResult[Any] = await session.stream(stmt)
 
         row: Optional[RowMapping] = await result.mappings().first()
         if row is None:
@@ -597,7 +607,7 @@ SELECT 1
   @priv_utils.instance_retry()
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
-                    report_extra: Optional[Any]):
+                    report_extra: Optional[Any]) -> None:
     logger.debug(
         f'Release: lease with id={id}, report={report}, report_extra={report_extra}'
     )
@@ -685,7 +695,8 @@ SELECT (SELECT COUNT(*) FROM updated_leases) as released_leases_count,
   @override
   @priv_utils.instance_retry()
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
-                             channels: List[_base.ChannelID], data: str):
+                             channels: List[_base.ChannelID],
+                             data: str) -> None:
     logger.debug(
         f'RegisterResource: resource_id={resource_id}, channels={channels}, data={data}'
     )
@@ -812,7 +823,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
     stmt = select(func.count(distinct(LEASES.c.id)).label('count')).where(
         LEASES.c.tombstone.is_(False), LEASES.c.resource_id.isnot(None))
 
-    result: Result = await session.execute(stmt)
+    result: Result[Any] = await session.execute(stmt)
     leases = result.scalar()
     if not isinstance(leases, int):
       raise ValueError(f'Expected int, got {type(leases)}: {leases}')
@@ -825,7 +836,7 @@ SELECT (SELECT COUNT(*) FROM updated_resources) as removed_resources_count,
     stmt = select(func.count(distinct(RESOURCES.c.id)).label('count')).where(
         RESOURCES.c.tombstone.is_(False))
 
-    result: Result = await session.execute(stmt)
+    result: Result[Any] = await session.execute(stmt)
     queue_size = result.scalar()
     if not isinstance(queue_size, int):
       raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
@@ -847,11 +858,7 @@ GROUP BY channel
     channel_resource_counts: Dict[_base.ChannelID, int] = {}
     async for row in result.mappings():
       channel = channel_id_ta.validate_python(row.channel)
-      if not isinstance(channel, str):
-        raise ValueError(f'Expected str, got {type(channel)}: {channel}')
-      count = row.count
-      if not isinstance(count, int):
-        raise ValueError(f'Expected int, got {type(count)}: {count}')
+      count = TypeAdapter(int).validate_python(row.count)
       channel_resource_counts[channel] = count
     return channel_resource_counts
 
@@ -862,11 +869,8 @@ GROUP BY channel
     stmt = select(
         func.count(distinct(CHANNEL_TICKET_QUEUE.c.lease_id)).label('count'))
 
-    result: Result = await session.execute(stmt)
-    queue_size = result.scalar()
-    if not isinstance(queue_size, int):
-      raise ValueError(f'Expected int, got {type(queue_size)}: {queue_size}')
-    return queue_size
+    result: Result[Any] = await session.execute(stmt)
+    return TypeAdapter(int).validate_python(result.scalar())
 
   @priv_utils.instance_retry()
   async def _ChannelQueueSize(
@@ -901,7 +905,7 @@ GROUP BY channel
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
                       RESOURCES.c.inserted).where(
                           RESOURCES.c.tombstone.is_(False))
-        result: AsyncResult = await session.stream(stmt)
+        result: AsyncResult[Any] = await session.stream(stmt)
 
         resources: List[_base.ResourceMeta] = []
         row: RowMapping
@@ -947,7 +951,7 @@ GROUP BY channel
 
   async def _CheckLeaseSanity(self, *, leases: List[RowMapping],
                               resources: List[RowMapping],
-                              channel_ticket_queue: List[RowMapping]):
+                              channel_ticket_queue: List[RowMapping]) -> None:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
 
@@ -1010,7 +1014,7 @@ GROUP BY channel
 
   async def _CheckResourceSanity(self, *, leases: List[RowMapping],
                                  resources: List[RowMapping],
-                                 resource_free_queue: List[RowMapping]):
+                                 resource_free_queue: List[RowMapping]) -> None:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     lease_id_2_idx = {lease['id']: idx for idx, lease in enumerate(leases)}
@@ -1071,7 +1075,7 @@ GROUP BY channel
         )
 
   @priv_utils.instance_retry()
-  async def _CheckSanity(self, session: AsyncSession):
+  async def _CheckSanity(self, session: AsyncSession) -> None:
     if not self._initialized:
       raise RuntimeError('DBFulcrum not initialized')
     leases: List[RowMapping] = list(
@@ -1092,6 +1096,6 @@ GROUP BY channel
                                     resources=resources,
                                     resource_free_queue=resource_free_queue)
 
-  async def _CheckSanityIfDebug(self, session: AsyncSession):
+  async def _CheckSanityIfDebug(self, session: AsyncSession) -> None:
     if self.debug:
       await self._CheckSanity(session)

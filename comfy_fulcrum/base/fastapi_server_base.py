@@ -9,7 +9,7 @@ import json
 import textwrap
 import traceback
 from abc import ABC
-from typing import Any, Generic, List, NamedTuple, Optional, Union
+from typing import Any, Dict, Generic, List, NamedTuple, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ class ExceptionInfo(BaseModel):
   doc: Optional[str]
 
   @classmethod
-  def from_exception(cls, e: Exception):
+  def from_exception(cls, e: Exception) -> 'ExceptionInfo':
     cause: Optional[Exception] = getattr(e, '__cause__', None)
     args: Optional[List[Any]] = getattr(e, 'args', None)
     args_: Optional[List[str]] = None
@@ -80,7 +80,7 @@ class ReconstructedException(APIErrorException):
     self.info = info
 
 
-class _ResponseErrorBase(BaseModel):
+class ResponseErrorBase(BaseModel):
   msg: str
   error: Optional[ExceptionInfo]
 
@@ -92,16 +92,19 @@ class _ResponseErrorBase(BaseModel):
   status_code: Optional[int] = Field(
       ..., description='The error status code. To be used in HTTP responses.')
   name: str = Field(..., description='The error name.')
-  context: dict = Field(..., description='The error context.')
+  context: Dict[str, Any] = Field(
+      ...,
+      description=
+      'The error context; arbitrary data in a JSONifiable dictionary.')
 
 
-_SuccessT = TypeVar('_SuccessT', bound=BaseModel)
-_ErrorT = TypeVar('_ErrorT', bound=_ResponseErrorBase)
+SuccessT = TypeVar('SuccessT', bound=BaseModel)
+ErrorT = TypeVar('ErrorT', bound=ResponseErrorBase)
 
 
-class _ResponseBase(BaseModel, Generic[_SuccessT, _ErrorT]):
-  success: Optional[_SuccessT]
-  error: Optional[_ErrorT]
+class ResponseBase(BaseModel, Generic[SuccessT, ErrorT]):
+  success: Optional[SuccessT]
+  error: Optional[ErrorT]
 
 
 class GetReq(BaseModel):
@@ -114,11 +117,11 @@ class GetResSuccess(BaseModel):
   ticket: Union[_base.Lease, _base.Ticket]
 
 
-class GetResError(_ResponseErrorBase):
+class GetResError(ResponseErrorBase):
   pass
 
 
-class GetRes(_ResponseBase[GetResSuccess, GetResError]):
+class GetRes(ResponseBase[GetResSuccess, GetResError]):
   pass
 
 
@@ -130,11 +133,11 @@ class TouchTicketResSuccess(BaseModel):
   ticket: Union[_base.Lease, _base.Ticket, None]
 
 
-class TouchTicketResError(_ResponseErrorBase):
+class TouchTicketResError(ResponseErrorBase):
   pass
 
 
-class TouchTicketRes(_ResponseBase[TouchTicketResSuccess, TouchTicketResError]):
+class TouchTicketRes(ResponseBase[TouchTicketResSuccess, TouchTicketResError]):
   pass
 
 
@@ -146,11 +149,11 @@ class TouchLeaseResSuccess(BaseModel):
   lease: Optional[_base.Lease]
 
 
-class TouchLeaseResError(_ResponseErrorBase):
+class TouchLeaseResError(ResponseErrorBase):
   pass
 
 
-class TouchLeaseRes(_ResponseBase[TouchLeaseResSuccess, TouchLeaseResError]):
+class TouchLeaseRes(ResponseBase[TouchLeaseResSuccess, TouchLeaseResError]):
   pass
 
 
@@ -164,11 +167,11 @@ class ReleaseResSuccess(BaseModel):
   pass
 
 
-class ReleaseResError(_ResponseErrorBase):
+class ReleaseResError(ResponseErrorBase):
   pass
 
 
-class ReleaseRes(_ResponseBase[ReleaseResSuccess, ReleaseResError]):
+class ReleaseRes(ResponseBase[ReleaseResSuccess, ReleaseResError]):
   pass
 
 
@@ -182,12 +185,12 @@ class RegisterResourceResSuccess(BaseModel):
   pass
 
 
-class RegisterResourceResError(_ResponseErrorBase):
+class RegisterResourceResError(ResponseErrorBase):
   pass
 
 
-class RegisterResourceRes(_ResponseBase[RegisterResourceResSuccess,
-                                        RegisterResourceResError]):
+class RegisterResourceRes(ResponseBase[RegisterResourceResSuccess,
+                                       RegisterResourceResError]):
   pass
 
 
@@ -199,12 +202,12 @@ class RemoveResourceResSuccess(BaseModel):
   removed_info: _base.RemovedResourceInfo
 
 
-class RemoveResourceResError(_ResponseErrorBase):
+class RemoveResourceResError(ResponseErrorBase):
   pass
 
 
-class RemoveResourceRes(_ResponseBase[RemoveResourceResSuccess,
-                                      RemoveResourceResError]):
+class RemoveResourceRes(ResponseBase[RemoveResourceResSuccess,
+                                     RemoveResourceResError]):
   pass
 
 
@@ -216,12 +219,12 @@ class ListResourcesResSuccess(BaseModel):
   resources: List[_base.ResourceMeta]
 
 
-class ListResourcesResError(_ResponseErrorBase):
+class ListResourcesResError(ResponseErrorBase):
   pass
 
 
-class ListResourcesRes(_ResponseBase[ListResourcesResSuccess,
-                                     ListResourcesResError]):
+class ListResourcesRes(ResponseBase[ListResourcesResSuccess,
+                                    ListResourcesResError]):
   pass
 
 
@@ -233,11 +236,11 @@ class StatsResSuccess(BaseModel):
   stats: _base.Stats
 
 
-class StatsResError(_ResponseErrorBase):
+class StatsResError(ResponseErrorBase):
   pass
 
 
-class StatsRes(_ResponseBase[StatsResSuccess, StatsResError]):
+class StatsRes(ResponseBase[StatsResSuccess, StatsResError]):
   pass
 
 

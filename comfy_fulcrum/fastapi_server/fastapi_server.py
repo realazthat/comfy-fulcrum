@@ -285,8 +285,8 @@ class FulcrumAPIState:
       logger.exception(e)
       raise Exception('Failed to initialize Fulcrum API.') from e
 
-  async def aclose(self):
+  async def aclose(self) -> None:
     await self.fulcrum.aclose()
 
-  async def close(self):
+  async def close(self) -> None:
     self.fulcrum.close()

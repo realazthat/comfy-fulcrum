@@ -10,6 +10,7 @@
   "reportMissingTypeStubs": false,
   "pythonVersion": "3.8",
   "pythonPlatform": "Linux",
+  "strict": ["comfy_fulcrum"],
   "executionEnvironments": [
     {
       "root": "comfy_fulcrum"

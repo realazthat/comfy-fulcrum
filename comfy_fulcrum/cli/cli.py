@@ -31,7 +31,7 @@ from rich_argparse import RichHelpFormatter
 from sqlalchemy.ext.asyncio import create_async_engine
 from typing_extensions import Literal
 
-from .. import _build_version as _build_version
+from .. import build_version as build_version
 from ..base.base import Lease, ResourceMeta, Ticket
 from ..base.fastapi_server_base import (GetReq, RegisterResourceReq,
                                         ReleaseReq, RemoveResourceReq,
@@ -68,7 +68,7 @@ def _GetProgramName() -> str:
 
 class _CustomRichHelpFormatter(RichHelpFormatter):
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args: Any, **kwargs: Any):
     if kwargs.get('width') is None:
       width, _ = get_terminal_size()
       if width == 0:
@@ -85,7 +85,7 @@ class _CustomRichHelpFormatter(RichHelpFormatter):
 
 
 async def _ServeCommand(*, dsn: str, host: str, port: int, lease_timeout: float,
-                        service_sleep_interval: float):
+                        service_sleep_interval: float) -> None:
 
   db_engine = create_async_engine(dsn, isolation_level='READ COMMITTED')
   db_fulcrum = DBFulcrum(engine=db_engine,
@@ -183,7 +183,7 @@ async def _ClientCommand(*, fulcrum_api_url: str, client_command: str,
     raise ValueError(f'Unknown format: {format}')
 
 
-async def amain():
+async def amain() -> None:
 
   # Windows<10 requires this.
   colorama.init()
@@ -193,7 +193,7 @@ async def amain():
                                 description=__doc__,
                                 formatter_class=_CustomRichHelpFormatter)
 
-    p.add_argument('--version', action='version', version=_build_version)
+    p.add_argument('--version', action='version', version=build_version)
 
     command_p = p.add_subparsers(title='command', dest='command', required=True)
 

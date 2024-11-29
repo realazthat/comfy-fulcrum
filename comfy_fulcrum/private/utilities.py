@@ -12,7 +12,7 @@ import sys
 from functools import wraps
 from typing import Any, Callable, NewType, Optional, TypeVar, Union, cast
 
-import tenacity
+import tenacity  # type: ignore[import-not-found,import,unused-ignore]
 
 UTCNaiveDatetime = NewType('UTCNaiveDatetime', datetime.datetime)
 UTCAwareDatetime = NewType('UTCAwareDatetime', datetime.datetime)
@@ -20,9 +20,9 @@ UTCAwareDatetime = NewType('UTCAwareDatetime', datetime.datetime)
 if sys.version_info >= (3, 9):
   to_thread = asyncio.to_thread
 else:
-  T = TypeVar('T')
+  _T = TypeVar('_T')
 
-  async def to_thread(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+  async def to_thread(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     """Run a function in a separate thread."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None,
@@ -55,9 +55,10 @@ def instance_retry(**retry_kwargs: Any) -> Callable[[_F], _F]:
         tenacity_kwargs.update(retry_kwargs)
 
         retry_decorator: Callable[..., _F]
-        retry_decorator = tenacity.retry(**tenacity_kwargs)
+        retry_decorator = tenacity.retry(  # type: ignore[reportUnknownVariableType,unused-ignore]
+            **tenacity_kwargs)
 
-        @retry_decorator
+        @retry_decorator  # type: ignore[reportUntypedFunctionDecorator,unused-ignore]
         @wraps(func)
         async def wrapped(*args: Any, **kwargs: Any) -> Any:
           return await func(self, *args, **kwargs)
@@ -74,9 +75,10 @@ def instance_retry(**retry_kwargs: Any) -> Callable[[_F], _F]:
         tenacity_kwargs.update(retry_kwargs)
 
         retry_decorator: Callable[..., _F]
-        retry_decorator = tenacity.retry(**tenacity_kwargs)
+        retry_decorator = tenacity.retry(  # type: ignore[reportUnknownVariableType,unused-ignore]
+            **tenacity_kwargs)
 
-        @retry_decorator
+        @retry_decorator  # type: ignore[reportUntypedFunctionDecorator,unused-ignore]
         @wraps(func)
         def wrapped(*args: Any, **kwargs: Any) -> Any:
           return func(self, *args, **kwargs)

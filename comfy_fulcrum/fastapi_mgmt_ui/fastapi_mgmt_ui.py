@@ -10,7 +10,7 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import fastapi
 from fastapi import HTTPException, Request
@@ -27,7 +27,7 @@ from ..private.utilities import (InterpretToUTC, NormalizeDatetime,
 if sys.version_info >= (3, 9):
   import importlib.resources as pkg_resources
 else:
-  import importlib_resources as pkg_resources  # type: ignore
+  import importlib_resources as pkg_resources
 
 from ..base import base as _base
 from ..base import fastapi_server_base as _server_base
@@ -100,12 +100,13 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
                              'error_id': error_id
                          })
 
-  async def _UIMGMTRoute(self, request: Request):
+  async def _UIMGMTRoute(self,
+                         request: Request) -> fastapi.responses.HTMLResponse:
     now: UTCNaiveDatetime = NormalizeDatetime(UTCNow())
 
     resources: List[_base.ResourceMeta] = await self._fulcrum.ListResources()
 
-    resources_dicts: List[dict] = []
+    resources_dicts: List[Dict[str, Any]] = []
     for resource in resources:
       inserted: UTCNaiveDatetime = ValidateUTCNaiveDatetime(resource.inserted)
       ago = naturaldelta(now - inserted)
@@ -123,7 +124,8 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
         'resources': resources_dicts,
     })
 
-  async def UIResourceRemovePost(self, request: Request):
+  async def UIResourceRemovePost(
+      self, request: Request) -> fastapi.responses.RedirectResponse:
     resource_id_ta = TypeAdapter(_base.ResourceID)
     form: FormData = await request.form()
     resource_id: Union[UploadFile, str] = form['resource_id']
@@ -161,7 +163,8 @@ class FulcrumUIRoutes(_server_base.FulcrumUIRoutesBase):
     return fastapi.responses.RedirectResponse(self._endpoints.mgmt,
                                               status_code=303)
 
-  async def UIResourceAddPost(self, request: Request):
+  async def UIResourceAddPost(
+      self, request: Request) -> fastapi.responses.RedirectResponse:
     resource_id_ta = TypeAdapter(_base.ResourceID)
     channels_ta = TypeAdapter(List[_base.ChannelID])
 

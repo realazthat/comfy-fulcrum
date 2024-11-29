@@ -14,7 +14,7 @@ from datetime import timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, overload
 
 from pydantic import BaseModel
-from typing_extensions import Literal, assert_never, override
+from typing_extensions import Literal, override
 
 from ..base import base as _base
 from ..private import utilities as priv_utils
@@ -49,18 +49,26 @@ class InMemoryFulcrum(_base.FulcrumBase):
 
     self._unmatched_resources: Set[_base.ResourceID] = set()
 
-    self._service_task: Optional[asyncio.Task] = None
+    self._service_task: Optional[asyncio.Task[None]] = None
 
-  async def Initialize(self):
+  @override
+  def __enter__(self) -> 'InMemoryFulcrum':
+    return self
+
+  @override
+  async def __aenter__(self) -> 'InMemoryFulcrum':
+    return self
+
+  async def Initialize(self) -> None:
     self._service_task = asyncio.create_task(
         self._Service(), name=f'{self.__class__.__name__}._Service')
 
-  def close(self):
+  def close(self) -> None:
     if self._service_task is None or self._service_task.done():
       return
     self._service_task.cancel()
 
-  async def aclose(self):
+  async def aclose(self) -> None:
     if self._service_task is None or self._service_task.done():
       return
     self._service_task.cancel()
@@ -77,13 +85,13 @@ class InMemoryFulcrum(_base.FulcrumBase):
       return False
     return True
 
-  def _ReleaseLease(self, *, lease: _base.Lease):
+  def _ReleaseLease(self, *, lease: _base.Lease) -> None:
     if lease.resource_id in self._resources:
       self._unmatched_resources.add(lease.resource_id)
     if lease.id in self._matched_leases:
       del self._matched_leases[lease.id]
 
-  async def _ServiceOnce(self):
+  async def _ServiceOnce(self) -> None:
     resources_sot: List[_base.ResourceMeta]
     resources_sot = await self.ListResources()
 
@@ -156,7 +164,7 @@ class InMemoryFulcrum(_base.FulcrumBase):
         # Remove the resource from the unmatched resources
         self._unmatched_resources.remove(resource_id)
 
-  async def _Service(self):
+  async def _Service(self) -> None:
     while True:
       try:
         await self._ServiceOnce()
@@ -214,10 +222,8 @@ class InMemoryFulcrum(_base.FulcrumBase):
         ticket_or_lease: Union[_base.Ticket, _base.Lease]
         if isinstance(ticket_or_lease_meta, _TicketMeta):
           ticket_or_lease = ticket_or_lease_meta.ticket
-        elif isinstance(ticket_or_lease_meta, _LeaseMeta):
-          ticket_or_lease = ticket_or_lease_meta.lease
         else:
-          assert_never(ticket_or_lease_meta)
+          ticket_or_lease = ticket_or_lease_meta.lease
 
         ticket_or_lease.ends = now + timedelta(
             seconds=ticket_or_lease.lease_timeout)
@@ -243,9 +249,10 @@ class InMemoryFulcrum(_base.FulcrumBase):
     _logger.debug(f'TouchLease: with id={id}')
     return await self._Touch(id=id, type='lease')
 
+  @override
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
-                    report_extra: Optional[Any]):
+                    report_extra: Optional[Any]) -> None:
     _logger.debug(
         f'Release: with id={id}, report={report}, report_extra={report_extra}')
 
@@ -260,7 +267,8 @@ class InMemoryFulcrum(_base.FulcrumBase):
 
   @override
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
-                             channels: List[_base.ChannelID], data: str):
+                             channels: List[_base.ChannelID],
+                             data: str) -> None:
     _logger.debug(
         f'RegisterResource: resource_id={resource_id}, channels={channels}, data={data}'
     )

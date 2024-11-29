@@ -15,11 +15,15 @@ from typing import Any, List, Optional, Union
 
 import fastapi
 import hypercorn
-from hypercorn.asyncio import serve as hypercorn_serve
+from hypercorn.asyncio import \
+    serve as hypercorn_serve  # pyright: ignore[reportUnknownVariableType]
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import create_async_engine
+from typing_extensions import override
 
 from ..base.base import (ChannelID, ClientName, FulcrumBase, Lease, LeaseID,
-                         ReportType, ResourceID, ResourceMeta, Stats, Ticket)
+                         RemovedResourceInfo, ReportType, ResourceID,
+                         ResourceMeta, Stats, Ticket)
 from ..db.db import METADATA, DBFulcrum
 from ..fastapi_client.fastapi_client import FulcrumClient
 from ..fastapi_server.fastapi_server import FulcrumServerRoutes
@@ -31,6 +35,23 @@ class FulcrumLogger(FulcrumBase):
     self._fulcrum = fulcrum
     self._logger = logger
 
+  @override
+  def close(self) -> None:
+    pass
+
+  @override
+  async def aclose(self) -> None:
+    pass
+
+  @override
+  def __enter__(self) -> 'FulcrumLogger':
+    return self
+
+  @override
+  async def __aenter__(self) -> 'FulcrumLogger':
+    return self
+
+  @override
   async def Get(self, *, client_name: ClientName, channels: List[ChannelID],
                 priority: int) -> Union[Lease, Ticket]:
     try:
@@ -46,6 +67,7 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in Get')
       raise
 
+  @override
   async def TouchTicket(self, *, id: LeaseID) -> Union[Lease, Ticket, None]:
     try:
       self._logger.debug('Fulcrum.TouchTicket(ticket=%r)', id)
@@ -56,6 +78,7 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in TouchTicket')
       raise
 
+  @override
   async def TouchLease(self, *, id: LeaseID) -> Optional[Lease]:
     try:
       self._logger.debug('Fulcrum.TouchLease(ticket=%r)', id)
@@ -67,15 +90,17 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in TouchLease')
       raise
 
+  @override
   async def Release(self, *, id: LeaseID, report: Optional[ReportType],
-                    report_extra: Optional[Any]):
+                    report_extra: Optional[Any]) -> None:
     try:
       self._logger.debug(
           'Fulcrum.Release(ticket=%r, report=%r, report_extra=%r)', id, report,
           report_extra)
-      res = await self._fulcrum.Release(id=id,
-                                        report=report,
-                                        report_extra=report_extra)
+      res: None = None
+      await self._fulcrum.Release(id=id,
+                                  report=report,
+                                  report_extra=report_extra)
       self._logger.debug(
           'Fulcrum.Release(ticket=%r, report=%r, report_extra=%r) -> %r', id,
           report, report_extra, res)
@@ -84,15 +109,17 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in Release')
       raise
 
+  @override
   async def RegisterResource(self, *, resource_id: ResourceID,
-                             channels: List[ChannelID], data: str):
+                             channels: List[ChannelID], data: str) -> None:
     try:
       self._logger.debug(
           'Fulcrum.RegisterResource(resource_id=%r, channels=%r, data=%r)',
           resource_id, channels, data)
-      res = await self._fulcrum.RegisterResource(resource_id=resource_id,
-                                                 channels=channels,
-                                                 data=data)
+      res: None = None
+      await self._fulcrum.RegisterResource(resource_id=resource_id,
+                                           channels=channels,
+                                           data=data)
       self._logger.debug(
           'Fulcrum.RegisterResource(resource_id=%r, channels=%r, data=%r) -> %r',
           resource_id, channels, data, res)
@@ -101,7 +128,9 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in RegisterResource')
       raise
 
-  async def RemoveResource(self, *, resource_id: ResourceID):
+  @override
+  async def RemoveResource(self, *,
+                           resource_id: ResourceID) -> RemovedResourceInfo:
     try:
       self._logger.debug('Fulcrum.RemoveResource(resource_id=%r)', resource_id)
       res = await self._fulcrum.RemoveResource(resource_id=resource_id)
@@ -112,6 +141,7 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in RemoveResource')
       raise
 
+  @override
   async def ListResources(self) -> List[ResourceMeta]:
     try:
       self._logger.debug('Fulcrum.ListResources()')
@@ -122,6 +152,7 @@ class FulcrumLogger(FulcrumBase):
       self._logger.exception('Error in ListResources')
       raise
 
+  @override
   async def Stats(self) -> Stats:
     try:
       self._logger.debug('Fulcrum.Stats()')
@@ -133,7 +164,7 @@ class FulcrumLogger(FulcrumBase):
       raise
 
 
-async def ServerThread(*, app: fastapi.FastAPI, port: int):
+async def ServerThread(*, app: fastapi.FastAPI, port: int) -> None:
   hconfig = hypercorn.Config()
   hconfig.bind = [f'0.0.0.0:{port}']
   hconfig.loglevel = 'debug'
@@ -146,10 +177,10 @@ async def ServerThread(*, app: fastapi.FastAPI, port: int):
 def GetFreePort() -> int:
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind(('localhost', 0))
-    return s.getsockname()[1]
+    return TypeAdapter(int).validate_python(s.getsockname()[1])
 
 
-async def amain():
+async def amain() -> None:
 
   FULCRUM_TEST_DSN: Optional[str] = environ.get('FULCRUM_TEST_DSN', None)
   if FULCRUM_TEST_DSN is None:
@@ -173,7 +204,9 @@ async def amain():
     await db_fulcrum.DropAll()
     await db_fulcrum.Initialize()
 
-    # fulcrum = FulcrummLogger(fulcrum=db_fulcrum, logger=logging.getLogger('FulcrummLogger'))
+    # TODO: Why did i disable this?
+    # fulcrum = FulcrumLogger(fulcrum=db_fulcrum,
+    #                         logger=logging.getLogger('FulcrummLogger'))
     fulcrum = db_fulcrum
 
     fulcrum_routes = FulcrumServerRoutes(fulcrum=fulcrum)

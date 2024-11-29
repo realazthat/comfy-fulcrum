@@ -6,11 +6,11 @@
 # under the MIT license or a compatible open source license. See LICENSE.md for
 # the license text.
 
-from typing import Any, List, Optional, Type, Union
+from typing import Any, List, NoReturn, Optional, Type, Union
 
 import aiohttp
 from pydantic import BaseModel
-from typing_extensions import TypeVar
+from typing_extensions import TypeVar, override
 
 from ..base import base as _base
 from ..base import fastapi_server_base as _server_base
@@ -21,7 +21,7 @@ _T = TypeVar('_T')
 
 
 def _RaiseAPIError(*, endpoint: str, url: str,
-                   error: _server_base._ResponseErrorBase):
+                   error: _server_base.ResponseErrorBase) -> NoReturn:
   if error.error is not None:
     raise _server_base.ReconstructedException(
         f'API call to {endpoint} failed at {url}', error.error)
@@ -41,8 +41,16 @@ class FulcrumClient(_base.FulcrumBase):
     self._server_url = fulcrum_api_url
     self._endpoints = endpoints
 
+  @override
+  def __enter__(self) -> 'FulcrumClient':
+    return self
+
+  @override
+  async def __aenter__(self) -> 'FulcrumClient':
+    return self
+
   async def _APICall(self, *, endpoint: str, req: BaseModel, res_type: Type[
-      _server_base._ResponseBase[_server_base._SuccessT, _server_base._ErrorT]],
+      _server_base.ResponseBase[_server_base.SuccessT, _server_base.ErrorT]],
                      suc_type: Type[_T]) -> _T:
     async with aiohttp.ClientSession() as session:
       url = _JoinURL(self._server_url, endpoint)
@@ -58,7 +66,8 @@ class FulcrumClient(_base.FulcrumBase):
         res_str: str = await resp.text()
     res = await _to_thread(res_type.model_validate_json, res_str)
     if res.error is not None:
-      return _RaiseAPIError(endpoint=endpoint, url=url, error=res.error)
+      _RaiseAPIError(endpoint=endpoint, url=url, error=res.error)
+      assert False, 'Unreachable code'
 
     if res.success is None:
       raise Exception(
@@ -69,6 +78,7 @@ class FulcrumClient(_base.FulcrumBase):
       )
     return res.success
 
+  @override
   async def Get(self, *, client_name: _base.ClientName,
                 channels: List[_base.ChannelID],
                 priority: int) -> Union[_base.Lease, _base.Ticket]:
@@ -82,6 +92,7 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.GetResSuccess)
     return success.ticket
 
+  @override
   async def TouchTicket(
       self, *, id: _base.LeaseID) -> Union[_base.Lease, _base.Ticket, None]:
     req = _server_base.TouchTicketReq(id=id)
@@ -92,6 +103,7 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.TouchTicketResSuccess)
     return success.ticket
 
+  @override
   async def TouchLease(self, *, id: _base.LeaseID) -> Optional[_base.Lease]:
     req = _server_base.TouchLeaseReq(id=id)
     success: _server_base.TouchLeaseResSuccess = await self._APICall(
@@ -101,9 +113,10 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.TouchLeaseResSuccess)
     return success.lease
 
+  @override
   async def Release(self, *, id: _base.LeaseID,
                     report: Optional[_base.ReportType],
-                    report_extra: Optional[Any]):
+                    report_extra: Optional[Any]) -> None:
     req = _server_base.ReleaseReq(id=id,
                                   report=report,
                                   report_extra=report_extra)
@@ -112,8 +125,10 @@ class FulcrumClient(_base.FulcrumBase):
                         res_type=_server_base.ReleaseRes,
                         suc_type=_server_base.ReleaseResSuccess)
 
+  @override
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
-                             channels: List[_base.ChannelID], data: str):
+                             channels: List[_base.ChannelID],
+                             data: str) -> None:
     req = _server_base.RegisterResourceReq(resource_id=resource_id,
                                            channels=channels,
                                            data=data)
@@ -122,6 +137,7 @@ class FulcrumClient(_base.FulcrumBase):
                         res_type=_server_base.RegisterResourceRes,
                         suc_type=_server_base.RegisterResourceResSuccess)
 
+  @override
   async def RemoveResource(
       self, *, resource_id: _base.ResourceID) -> _base.RemovedResourceInfo:
     req = _server_base.RemoveResourceReq(resource_id=resource_id)
@@ -132,6 +148,7 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.RemoveResourceResSuccess)
     return success.removed_info
 
+  @override
   async def ListResources(self) -> List[_base.ResourceMeta]:
     req = _server_base.ListResourcesReq()
     success: _server_base.ListResourcesResSuccess = await self._APICall(
@@ -141,6 +158,7 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.ListResourcesResSuccess)
     return success.resources
 
+  @override
   async def Stats(self) -> _base.Stats:
     req = _server_base.StatsReq()
     success: _server_base.StatsResSuccess = await self._APICall(
@@ -150,8 +168,10 @@ class FulcrumClient(_base.FulcrumBase):
         suc_type=_server_base.StatsResSuccess)
     return success.stats
 
-  def close(self):
+  @override
+  def close(self) -> None:
     pass
 
-  async def aclose(self):
+  @override
+  async def aclose(self) -> None:
     pass

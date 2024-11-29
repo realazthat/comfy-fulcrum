@@ -5,7 +5,7 @@
 # under the MIT license or a compatible open source license. See LICENSE.md for
 # the license text.
 
-from typing import List
+from typing import Any, List
 
 from asyncpg import SerializationError
 from sqlalchemy import (TIMESTAMP, Boolean, Column, Index, MetaData, Result,
@@ -67,12 +67,12 @@ class DBResourceSOT(_base.ResourceSOTBase):
           wait_exponential_jitter(initial=1.0),
       }
 
-  async def Initalize(self):
+  async def Initalize(self) -> None:
     async with self._db_engine.begin() as conn:
       await conn.run_sync(METADATA.create_all)
     self._initialized = True
 
-  async def DropAll(self):
+  async def DropAll(self) -> None:
     async with self._db_engine.begin() as conn:
       await conn.run_sync(METADATA.drop_all)
 
@@ -87,7 +87,7 @@ class DBResourceSOT(_base.ResourceSOTBase):
         stmt = select(RESOURCES.c.id, RESOURCES.c.channels, RESOURCES.c.data,
                       RESOURCES.c.inserted).where(
                           RESOURCES.c.tombstone.is_(False))
-        result: AsyncResult = await session.stream(stmt)
+        result: AsyncResult[Any] = await session.stream(stmt)
 
         resources: List[_base.ResourceMeta] = []
         row: RowMapping
@@ -107,7 +107,8 @@ class DBResourceSOT(_base.ResourceSOTBase):
   @override
   @priv_utils.instance_retry()
   async def RegisterResource(self, *, resource_id: _base.ResourceID,
-                             channels: List[_base.ChannelID], data: str):
+                             channels: List[_base.ChannelID],
+                             data: str) -> None:
     async with await self._GetSession() as session:
       async with db_priv_utils.AutoCommit(session, sanity=None):
         stmt = RESOURCES.insert().values(
@@ -126,7 +127,7 @@ class DBResourceSOT(_base.ResourceSOTBase):
       async with db_priv_utils.AutoCommit(session, sanity=None):
         stmt = RESOURCES.update().where(RESOURCES.c.id == resource_id).values(
             tombstone=True).returning(RESOURCES.c.id)
-        result: Result = await session.execute(stmt)
+        result: Result[Any] = await session.execute(stmt)
         count: int = 0
         for _ in result:
           count += 1

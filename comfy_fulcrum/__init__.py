@@ -8,6 +8,6 @@ else:
   from importlib_metadata import version as importlib_version
 
 try:
-  _build_version = importlib_version('comfy_fulcrum')
+  build_version = importlib_version('comfy_fulcrum')
 except PackageNotFoundError:
-  _build_version = '0.0.0'
+  build_version = '0.0.0'

@@ -80,7 +80,7 @@ class ResourceSOTBase(ABC):
 
   @abstractmethod
   async def RegisterResource(self, *, resource_id: ResourceID,
-                             channels: List[ChannelID], data: str):
+                             channels: List[ChannelID], data: str) -> None:
     raise NotImplementedError()
 
   @abstractmethod
@@ -107,12 +107,12 @@ class FulcrumBase(ABC):
 
   @abstractmethod
   async def Release(self, *, id: LeaseID, report: Optional[ReportType],
-                    report_extra: Optional[Any]):
+                    report_extra: Optional[Any]) -> None:
     raise NotImplementedError()
 
   @abstractmethod
   async def RegisterResource(self, *, resource_id: ResourceID,
-                             channels: List[ChannelID], data: str):
+                             channels: List[ChannelID], data: str) -> None:
     raise NotImplementedError()
 
   @abstractmethod
@@ -129,21 +129,24 @@ class FulcrumBase(ABC):
     raise NotImplementedError()
 
   @abstractmethod
-  def close(self):
+  def close(self) -> None:
     raise NotImplementedError()
 
   @abstractmethod
-  async def aclose(self):
+  async def aclose(self) -> None:
     raise NotImplementedError()
 
-  def __enter__(self):
-    return self
+  @abstractmethod
+  def __enter__(self) -> 'FulcrumBase':
+    raise NotImplementedError()
 
-  def __exit__(self, exc_type, exc_value, traceback):
+  def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
     self.close()
 
-  async def __aenter__(self):
-    return self
+  @abstractmethod
+  async def __aenter__(self) -> 'FulcrumBase':
+    raise NotImplementedError()
 
-  async def __aexit__(self, exc_type, exc_value, traceback):
+  async def __aexit__(self, exc_type: Any, exc_value: Any,
+                      traceback: Any) -> None:
     await self.aclose()
